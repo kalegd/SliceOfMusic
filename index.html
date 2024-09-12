@@ -1,0 +1,28 @@
+<html>
+  <head>
+    <title>Digital Bacon - App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="./css/index.css">
+    <!-- SHIM FOR WEBRTC CAUSE FIREFOX IS OLD MAN -->
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/webrtc-adapter/8.2.0/adapter.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "DigitalBacon": "/node_modules/digitalbacon/build/DigitalBacon.js",
+          "three": "/node_modules/three/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script type="module">
+      import { setup } from 'DigitalBacon';
+      import main from '/scripts/main.js';
+
+      let params = { projectFilePath: './base-project.zip'};
+
+      setup("container", params).then(() => main());
+    </script>
+  </body>
+</html>
