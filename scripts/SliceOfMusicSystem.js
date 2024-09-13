@@ -6,16 +6,15 @@
 
 import * as THREE from 'three';
 
-const { Assets, ProjectHandler, PubSub, Scene, UserController, getDeviceType, isEditor } = window.DigitalBacon;
+const { Assets, AudioHandler, ProjectHandler, PubSub, Scene, UserController, getDeviceType, isEditor } = window.DigitalBacon;
 const { System } = Assets;
-import { loadBeatmap } from 'http://localhost:8000/node_modules/bsmap/esm/beatmap/loader/_main.js';
+import { loadBeatmap } from 'bsmap';
 const deviceType = getDeviceType();
 
 const AUDIO_QUANTITY = 10;
 const COMPONENT_ASSET_ID = 'b40ad677-1ec9-4ac0-9af6-8153a8b9f1e0';
 const HJD_START = 4;
 const HJD_MIN = .25;
-const audioContext = new AudioContext();
 const workingMatrix = new THREE.Matrix4();
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
@@ -116,10 +115,12 @@ export default class SliceOfMusicSystem extends System {
         this['_' + side + 'BlockMaterial'].emissive.setHex(hex);
     }
 
-    _startTrack(trackDetails) {
+    async _startTrack(trackDetails) {
         //console.log(trackDetails);
         if(this._source) this._source.stop();
         let audio = trackDetails.data.audio;
+        let audioContext = AudioHandler.getListener().context;
+        if(audioContext.state === 'interrupted') await audioContext.resume();
         let buffer = audioContext.createBuffer(
             audio.channelData.length, audio.samplesDecoded,
             audio.sampleRate);

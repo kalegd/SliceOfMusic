@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
-import { loadBeatmap } from 'http://localhost:8000/node_modules/bsmap/esm/beatmap/loader/_main.js';
+import { loadBeatmap } from 'bsmap';
 
 const { Assets, DigitalBaconUI, OrbitDisablingPointerInteractable, ProjectHandler, PubSub, getDeviceType, setKeyboardLock } = window.DigitalBacon;
 const { CustomAssetEntity } = Assets;

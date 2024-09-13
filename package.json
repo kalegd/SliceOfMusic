@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "http-server -c-1 -p 8000"
+    "start": "http-server -c-1 -p 8000",
+    "start-ssl": "http-server -S -c cert.pem -c-1 -p 8000"
   },
   "dependencies": {
     "bsmap": "^2.1.3",
