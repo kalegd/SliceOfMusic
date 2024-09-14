@@ -16,6 +16,7 @@ const COMPONENT_ASSET_ID = 'b40ad677-1ec9-4ac0-9af6-8153a8b9f1e0';
 const HJD_START = 4;
 const HJD_MIN = .25;
 const workingMatrix = new THREE.Matrix4();
+const workingVector3 = new THREE.Vector3();
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
     Math.PI,
@@ -68,7 +69,7 @@ export default class SliceOfMusicSystem extends System {
             if(type == 'BOMB') this._setupBombs(instance);
             if(type == 'SABER') this._setupSabers(instance);
         });
-        PubSub.subscribe('SLICE_OF_MUSIC_SYSTEM', 'SLICE_OF_MUSIC:START',
+        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:START',
             (trackDetails) => this._startTrack(trackDetails));
     }
 
@@ -190,6 +191,7 @@ export default class SliceOfMusicSystem extends System {
         this._source = audioContext.createBufferSource();
         this._source.buffer = buffer;
         this._source.connect(audioContext.destination);
+        this._source.onended = () => this._onTrackFinished();
         //If we want to track playback position, look into this thread
         //https://github.com/WebAudio/web-audio-api/issues/2397
         let info = trackDetails.data.difficultyInfo[trackDetails.difficulty];
@@ -198,7 +200,7 @@ export default class SliceOfMusicSystem extends System {
         this._setColor('left', 0xff00ff);
         this._setColor('right', 0x00ffff);
         Scene.object.add(this._course);
-        console.log(info);
+        //console.log(info);
         console.log(mapDetails);
     }
 
@@ -243,13 +245,43 @@ export default class SliceOfMusicSystem extends System {
         return njs * (60 / bpm) * hjd * 2;
     }
 
+    _onTrackFinished() {
+        this._trackStarted = false;
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:END', {});
+    }
+
     onAddToProject() {
         super.onAddToProject();
         this._addSubscriptions();
     }
 
-    _controllerCheck() {
-
+    _controllerCheck(side) {
+        let saber = this['_' + side + 'Saber'];
+        if(!saber) return;
+        side = side.toUpperCase();
+        let controller = UserController.getController(side);
+        if(!controller?.object.parent) controller =UserController.getHand(side);
+        if(!this._trackStarted) {
+            if(saber.parent) saber.parentId = null;
+            if(controller?._modelObject && !controller._modelObject.visible)
+                controller._modelObject.visible = true;
+            return;
+        } else if(controller?._modelObject?.visible) {
+            controller._modelObject.visible = false;
+        }
+        if(saber.parent != controller) {
+            saber.parentId = controller?.id;
+            saber.position = [0, 0, 0];
+            saber.rotation = [-90, 0, 0];
+        }
+        let bones = controller?._modelObject?.motionController?.bones;
+        if(bones) {
+            saber.object.position.addVectors(bones[6].position,
+                bones[0].position).multiplyScalar(0.5);
+            bones[6].getWorldPosition(workingVector3);
+            saber.object.lookAt(workingVector3);
+            saber.object.rotateX(Math.PI / 2);
+        }
     }
 
     _updateNotes(maxBeat) {
@@ -341,7 +373,10 @@ export default class SliceOfMusicSystem extends System {
     }
 
     update(timeDelta) {
-        this._controllerCheck();
+        if(deviceType == 'XR') {
+            this._controllerCheck('left');
+            this._controllerCheck('right');
+        }
         if(!this._trackStarted) {
             return;
         } else if(this._pendingAudioStart) {

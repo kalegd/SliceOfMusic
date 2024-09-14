@@ -318,10 +318,10 @@ export default class SliceOfMusicMenu extends CustomAssetEntity {
         super(params);
         this._menu = new _SliceOfMusicMenu();
         this.object.add(this._menu);
-        PubSub.subscribe('SLICE_OF_MUSIC_MENU', 'SLICE_OF_MUSIC:START', () => {
+        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:START', () => {
             this.object.remove(this._menu);
         });
-        PubSub.subscribe('SLICE_OF_MUSIC_MENU', 'SLICE_OF_MUSIC:END', () => {
+        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:END', () => {
             this.object.add(this._menu);
         });
     }
