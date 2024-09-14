@@ -3,8 +3,8 @@ import { LibraryHandler, ProjectHandler, Scene } from 'DigitalBacon';
 let assets = {};
 let componentTypes = {
     block: 'BLOCK',
-    //saber: 'SABER',
-    //bomb: 'BOMB',
+    saber: 'SABER',
+    bomb: 'BOMB',
     //slicedAudio: 'SLICED_BLOCK_AUDIO',
     //missedAudio: 'MISSED_BLOCK_AUDIO',
     //slicedBombAudio: 'SLICED_BOMB_AUDIO',
@@ -21,8 +21,16 @@ function loadAsset(path, assetName, optionalParams) {
 }
 
 function loadAssets() {
+    let projectAssets = ProjectHandler.getAssets();
+    for(let id in projectAssets) {
+        if(projectAssets[id].name == 'Saber Handle') {
+            assets['saber'] = projectAssets[id];
+            break;
+        }
+    }
     let promises = [];
     promises.push(loadAsset('/models/block.glb', 'block'));
+    promises.push(loadAsset('/models/bomb.glb', 'bomb'));
     promises.push(loadAsset('/scripts/SliceOfMusicMenu.js', 'menu',
         { position: [0, 1.5, -1] }));
     promises.push(loadAsset('/scripts/SliceOfMusicSystem.js', 'system'));

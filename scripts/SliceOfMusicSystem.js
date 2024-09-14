@@ -46,6 +46,7 @@ export default class SliceOfMusicSystem extends System {
         };
         this._liveBlocks = new Set();
         this._playerHeight = 1.7;
+        this._setupObstacles();
     }
 
     _getDefaultName() {
@@ -60,9 +61,12 @@ export default class SliceOfMusicSystem extends System {
             let instance = ProjectHandler.getSessionAsset(message.id);
             let component = ProjectHandler.getSessionAsset(message.componentId);
             let type = component.type;
-            if(!(type in this._assets)) this._assets[type] = instance;
+            if(type in this._assets) return;
+            this._assets[type] = instance;
             if(type.endsWith('AUDIO')) this._createAudio(type);
             if(type == 'BLOCK') this._setupBlocks(instance);
+            if(type == 'BOMB') this._setupBombs(instance);
+            if(type == 'SABER') this._setupSabers(instance);
         });
         PubSub.subscribe('SLICE_OF_MUSIC_SYSTEM', 'SLICE_OF_MUSIC:START',
             (trackDetails) => this._startTrack(trackDetails));
@@ -103,16 +107,72 @@ export default class SliceOfMusicSystem extends System {
         this._course.add(this._rightBlocks);
         this._course.add(this._arrows);
         this._course.add(this._circles);
+        if(this._bombs) this._course.add(this._bombs);
+        if(this._obstacles) this._course.add(this._obstacles);
         this._leftBlocks.frustumCulled = false;
         this._rightBlocks.frustumCulled = false;
         this._arrows.frustumCulled = false;
         this._circles.frustumCulled = false;
+    }
 
+    _setupBombs(instance) {
+        let mesh;
+        instance.object.traverse((node) => {
+            if(node instanceof THREE.Mesh) mesh = node;
+        });
+        this._bombs = new THREE.InstancedMesh(mesh.geometry,mesh.material,1000);
+        if(this._course) this._course.add(this._bombs);
+        this._bombs.frustumCulled = false;
+    }
+
+    _setupObstacles() {
+        let geometry = new THREE.BoxGeometry(GRID_DIMENSION, GRID_DIMENSION,
+            GRID_DIMENSION);
+        let material = new THREE.MeshLambertMaterial({
+            color: 0xffff00,
+            opacity: 0.5,
+            side: THREE.DoubleSide,
+            transparent: true,
+        });
+        this._obstacles = new THREE.InstancedMesh(geometry, material, 1000);
+        if(this._course) this._course.add(this._obstacles);
+        this._obstacles.frustumCulled = false;
+    }
+
+    _setupSabers(instance) {
+        this._rightSaber = instance;
+        this._leftSaber = instance.clone(true);
+        this._rightSaber.position = [1, 1, -1];
+        this._leftSaber.position = [-1, 1, -1];
+        for(let child of this._rightSaber.children) {
+            if(child.name == 'Saber Blade') {
+                this._rightSaberMaterial = ProjectHandler.getAsset(
+                    child.materialId);
+                let params = this._rightSaberMaterial.exportParams();
+                delete params.id;
+                this._leftSaberMaterial = ProjectHandler.addNewAsset(
+                    this._rightSaberMaterial.assetId, params);
+            }
+        }
+        for(let child of this._leftSaber.children) {
+            child.materialId = this._leftSaberMaterial.id;
+            for(let child2 of child.children) {
+                if(child2.name == 'Saber Tip')
+                    child2.materialId = this._leftSaberMaterial.id;
+            }
+        }
+        this._rightSaber.object.traverse((node) => {
+            node.renderOrder = 5;
+        });
+        this._leftSaber.object.traverse((node) => {
+            node.renderOrder = 5;
+        });
     }
 
     _setColor(side, hex) {
         this['_' + side + 'BlockMaterial'].color.setHex(hex);
         this['_' + side + 'BlockMaterial'].emissive.setHex(hex);
+        this['_' + side + 'SaberMaterial'].color = hex;
     }
 
     async _startTrack(trackDetails) {
@@ -135,8 +195,8 @@ export default class SliceOfMusicSystem extends System {
         let info = trackDetails.data.difficultyInfo[trackDetails.difficulty];
         let mapDetails =trackDetails.data.difficulties[trackDetails.difficulty];
         this._setupCourse(trackDetails, info, mapDetails);
-        this._setColor('left', 0xff0000);
-        this._setColor('right', 0x0000ff);
+        this._setColor('left', 0xff00ff);
+        this._setColor('right', 0x00ffff);
         Scene.object.add(this._course);
         console.log(info);
         console.log(mapDetails);
@@ -151,13 +211,19 @@ export default class SliceOfMusicSystem extends System {
         this._jumpDistance = this._calculateJumpDistance(this._bpm,
             this._noteJumpSpeed, this._halfJumpDuration);
         this._colorNotes = mapDetails.difficulty.colorNotes;
+        this._bombNotes = mapDetails.difficulty.bombNotes;
+        this._obstacleNotes = mapDetails.difficulty.obstacles;
         this._colorNotesIndex = 0;
-        this._course.position.set(GRID_DIMENSION * -1.5, this._playerHeight - GRID_DIMENSION * 2, 0);
+        this._bombNotesIndex = 0;
+        this._obstacleNotesIndex = 0;
+        this._course.position.set(GRID_DIMENSION * -1.5, this._playerHeight - GRID_DIMENSION * 2, -0.5);
         this._currentBeat = 0;
         this._leftBlocks.count = 0;
         this._rightBlocks.count = 0;
         this._arrows.count = 0;
         this._circles.count = 0;
+        this._bombs.count = 0;
+        this._obstacles.count = 0;
         this._pendingAudioStart = true;
         this._trackStarted = true;
     }
@@ -182,17 +248,11 @@ export default class SliceOfMusicSystem extends System {
         this._addSubscriptions();
     }
 
-    update(timeDelta) {
-        if(!this._trackStarted) {
-            return;
-        } else if(this._pendingAudioStart) {
-            this._source.start();
-            this._pendingAudioStart = false;
-            timeDelta = 0;
-        }
-        this._course.position.z += this._noteJumpSpeed * timeDelta;
-        this._currentBeat += timeDelta * this._bpm / 60;
-        let maxBeat = this._currentBeat + this._halfJumpDuration;
+    _controllerCheck() {
+
+    }
+
+    _updateNotes(maxBeat) {
         while(this._colorNotesIndex < this._colorNotes.length) {
             let note = this._colorNotes[this._colorNotesIndex];
             if(note.time < maxBeat) {
@@ -227,6 +287,74 @@ export default class SliceOfMusicSystem extends System {
                 break;
             }
         }
+    }
+
+    _updateBombs(maxBeat) {
+        while(this._bombNotesIndex < this._bombNotes.length) {
+            let note = this._bombNotes[this._bombNotesIndex];
+            if(note.time < maxBeat) {
+                let blocksIndex = this._bombs.count;
+                this._bombs.count++;
+                let time = note.time * 60 / this._bpm;
+                let distance = -1 * this._noteJumpSpeed * time;
+                workingMatrix.identity();
+                workingMatrix.setPosition(note.posX * GRID_DIMENSION,
+                    note.posY * GRID_DIMENSION, distance);
+                this._bombs.setMatrixAt(blocksIndex, workingMatrix);
+                this._bombs.instanceMatrix.needsUpdate = true;
+                this._bombNotesIndex++;
+                this._liveBlocks.add({
+                    blocks: this._bombs,
+                    blocksIndex: blocksIndex,
+                });
+            } else {
+                break;
+            }
+        }
+    }
+
+    _updateObstacles(maxBeat) {
+        while(this._obstacleNotesIndex < this._obstacleNotes.length) {
+            let note = this._obstacleNotes[this._obstacleNotesIndex];
+            if(note.time < maxBeat) {
+                let blocksIndex = this._obstacles.count;
+                this._obstacles.count++;
+                let time = note.time * 60 / this._bpm;
+                let distance = -1 * this._noteJumpSpeed * time;
+                workingMatrix.identity();
+                let depth = this._noteJumpSpeed * note.duration * 60 /this._bpm;
+                distance -= (depth - 0.4) / 2;
+                workingMatrix.makeScale(note.width, note.height, depth);
+                workingMatrix.setPosition(note.posX * GRID_DIMENSION,
+                    note.posY * GRID_DIMENSION, distance);
+                this._obstacles.setMatrixAt(blocksIndex, workingMatrix);
+                this._obstacles.instanceMatrix.needsUpdate = true;
+                this._obstacleNotesIndex++;
+                this._liveBlocks.add({
+                    blocks: this._obstacles,
+                    blocksIndex: blocksIndex,
+                });
+            } else {
+                break;
+            }
+        }
+    }
+
+    update(timeDelta) {
+        this._controllerCheck();
+        if(!this._trackStarted) {
+            return;
+        } else if(this._pendingAudioStart) {
+            this._source.start();
+            this._pendingAudioStart = false;
+            timeDelta = 0;
+        }
+        this._course.position.z += this._noteJumpSpeed * timeDelta;
+        this._currentBeat += timeDelta * this._bpm / 60;
+        let maxBeat = this._currentBeat + this._halfJumpDuration;
+        this._updateNotes(maxBeat);
+        this._updateBombs(maxBeat);
+        this._updateObstacles(maxBeat);
     }
 
     static assetId = '98f2445f-df75-4ec6-82a0-7bb2cd23eb1c';
