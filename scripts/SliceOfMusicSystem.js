@@ -45,7 +45,6 @@ export default class SliceOfMusicSystem extends System {
             MISSED_BLOCK_AUDIO: 0,
             SLICED_BOMB_AUDIO: 0,
         };
-        this._liveBlocks = new Set();
         this._playerHeight = 1.7;
         this._setupObstacles();
     }
@@ -96,13 +95,13 @@ export default class SliceOfMusicSystem extends System {
         this._rightBlockMaterial = cubeMesh.material;
         this._leftBlockMaterial = cubeMesh.material.clone();
         this._leftBlocks = new THREE.InstancedMesh(cubeMesh.geometry,
-            this._leftBlockMaterial, 1000);
+            this._leftBlockMaterial, 200);
         this._rightBlocks = new THREE.InstancedMesh(cubeMesh.geometry,
-            this._rightBlockMaterial, 1000);
+            this._rightBlockMaterial, 200);
         this._arrows = new THREE.InstancedMesh(arrowMesh.geometry,
-            arrowMesh.material, 2000);
+            arrowMesh.material, 400);
         this._circles = new THREE.InstancedMesh(circleMesh.geometry,
-            circleMesh.material, 2000);
+            circleMesh.material, 400);
         this._course = new THREE.Object3D();
         this._course.add(this._leftBlocks);
         this._course.add(this._rightBlocks);
@@ -110,6 +109,10 @@ export default class SliceOfMusicSystem extends System {
         this._course.add(this._circles);
         if(this._bombs) this._course.add(this._bombs);
         if(this._obstacles) this._course.add(this._obstacles);
+        this._leftBlocks.maxCount = 200;
+        this._rightBlocks.maxCount = 200;
+        this._arrows.maxCount = 400;
+        this._circles.maxCount = 400;
         this._leftBlocks.frustumCulled = false;
         this._rightBlocks.frustumCulled = false;
         this._arrows.frustumCulled = false;
@@ -121,8 +124,9 @@ export default class SliceOfMusicSystem extends System {
         instance.object.traverse((node) => {
             if(node instanceof THREE.Mesh) mesh = node;
         });
-        this._bombs = new THREE.InstancedMesh(mesh.geometry,mesh.material,1000);
+        this._bombs = new THREE.InstancedMesh(mesh.geometry,mesh.material, 200);
         if(this._course) this._course.add(this._bombs);
+        this._bombs.maxCount = 200;
         this._bombs.frustumCulled = false;
     }
 
@@ -135,8 +139,9 @@ export default class SliceOfMusicSystem extends System {
             side: THREE.DoubleSide,
             transparent: true,
         });
-        this._obstacles = new THREE.InstancedMesh(geometry, material, 1000);
+        this._obstacles = new THREE.InstancedMesh(geometry, material, 200);
         if(this._course) this._course.add(this._obstacles);
+        this._obstacles.maxCount = 200;
         this._obstacles.frustumCulled = false;
     }
 
@@ -215,10 +220,20 @@ export default class SliceOfMusicSystem extends System {
         this._colorNotes = mapDetails.difficulty.colorNotes;
         this._bombNotes = mapDetails.difficulty.bombNotes;
         this._obstacleNotes = mapDetails.difficulty.obstacles;
+        this._bpmEvents = mapDetails.difficulty.bpmEvents || [];
+        while(this._bpmEvents.length && this._bpmEvents[0].time == 0) {
+            this._bpm = this._bpmEvents[0].bpm;
+            this._bpmEvents.shift();
+        }
+        this._originalBpm = this._bpm;
         this._colorNotesIndex = 0;
         this._bombNotesIndex = 0;
         this._obstacleNotesIndex = 0;
-        this._course.position.set(GRID_DIMENSION * -1.5, this._playerHeight - GRID_DIMENSION * 2, -0.5);
+        this._bpmEventsIndex = 0;
+        this._collisionsIndex = 0;
+        this._liveBlocks = [];
+        this._liveObstacles = [];
+        this._course.position.set(GRID_DIMENSION * -1.5, this._playerHeight - GRID_DIMENSION * 2, -1.5);
         this._currentBeat = 0;
         this._leftBlocks.count = 0;
         this._rightBlocks.count = 0;
@@ -226,6 +241,12 @@ export default class SliceOfMusicSystem extends System {
         this._circles.count = 0;
         this._bombs.count = 0;
         this._obstacles.count = 0;
+        this._leftBlocks.counter = 0;
+        this._rightBlocks.counter = 0;
+        this._arrows.counter = 0;
+        this._circles.counter = 0;
+        this._bombs.counter = 0;
+        this._obstacles.counter = 0;
         this._pendingAudioStart = true;
         this._trackStarted = true;
     }
@@ -284,6 +305,54 @@ export default class SliceOfMusicSystem extends System {
         }
     }
 
+    _checkCollisions() {
+        while(this._liveBlocks.length && this._getZ(this._liveBlocks[0]) > 2) {
+            let details = this._liveBlocks[0];
+            workingMatrix.makeTranslation(0, -1000, 0);
+            details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
+            details.blocks.instanceMatrix.needsUpdate = true;
+            if(!details.isBomb) {
+                details.symbols.setMatrixAt(details.symbolsIndex,workingMatrix);
+                details.symbols.instanceMatrix.needsUpdate = true;
+            }
+            this._liveBlocks.shift();
+            this._collisionsIndex = Math.max(0, this._collisionsIndex - 1);
+        }
+        while(this._liveObstacles.length
+                && this._getZ(this._liveObstacles[0]) > 2) {
+            let details = this._liveObstacles[0];
+            workingMatrix.makeTranslation(0, -1000, 0);
+            details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
+            details.blocks.instanceMatrix.needsUpdate = true;
+            this._liveObstacles.shift();
+        }
+
+        for(let i = this._collisionsIndex; i < this._liveBlocks.length; i++) {
+            let details = this._liveBlocks[i];
+            let z = this._getZ(details);
+            if(z < -2) return;
+            if(z > 0.5) {
+                if(!details.passed) this._miss(details);
+            } else {
+                //TODO: Check collision
+            }
+        }
+    }
+
+    _getZ(details) {
+        details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
+        workingVector3.setFromMatrixPosition(workingMatrix);
+        let z = this._course.position.z + workingVector3.z;
+        if(details.depth) z -= details.depth / 2;
+        return z;
+    }
+
+    _miss(details) {
+        details.passed = true;
+        if(details.isBomb) return;
+        //TODO: Play audio and update score/multiplier
+    }
+
     _updateNotes(maxBeat) {
         while(this._colorNotesIndex < this._colorNotes.length) {
             let note = this._colorNotes[this._colorNotesIndex];
@@ -294,12 +363,13 @@ export default class SliceOfMusicSystem extends System {
                 let symbols = (note.direction == 8)
                     ? this._circles
                     : this._arrows;
-                let blocksIndex = blocks.count;
-                let symbolsIndex = symbols.count;
-                blocks.count++;
-                symbols.count++;
-                let time = note.time * 60 / this._bpm;
-                let distance = -1 * this._noteJumpSpeed * time;
+                let blocksIndex = blocks.counter % blocks.maxCount;
+                let symbolsIndex = symbols.counter % symbols.maxCount;
+                blocks.counter++;
+                symbols.counter++;
+                blocks.count = Math.min(blocks.counter, blocks.maxCount);
+                symbols.count = Math.min(symbols.counter, symbols.maxCount);
+                let distance = this._getNoteDistance(note.time);
                 workingMatrix.identity();
                 workingMatrix.makeRotationZ(directionRotations[note.direction]);
                 workingMatrix.setPosition(note.posX * GRID_DIMENSION,
@@ -309,7 +379,7 @@ export default class SliceOfMusicSystem extends System {
                 symbols.setMatrixAt(symbolsIndex, workingMatrix);
                 symbols.instanceMatrix.needsUpdate = true;
                 this._colorNotesIndex++;
-                this._liveBlocks.add({
+                this._liveBlocks.push({
                     blocks: blocks,
                     blocksIndex: blocksIndex,
                     symbols: symbols,
@@ -325,19 +395,21 @@ export default class SliceOfMusicSystem extends System {
         while(this._bombNotesIndex < this._bombNotes.length) {
             let note = this._bombNotes[this._bombNotesIndex];
             if(note.time < maxBeat) {
-                let blocksIndex = this._bombs.count;
-                this._bombs.count++;
-                let time = note.time * 60 / this._bpm;
-                let distance = -1 * this._noteJumpSpeed * time;
+                let blocksIndex = this._bombs.counter;
+                this._bombs.counter++;
+                this._bombs.count = Math.min(this._bombs.counter,
+                    this._bombs.maxCount);
+                let distance = this._getNoteDistance(note.time);
                 workingMatrix.identity();
                 workingMatrix.setPosition(note.posX * GRID_DIMENSION,
                     note.posY * GRID_DIMENSION, distance);
                 this._bombs.setMatrixAt(blocksIndex, workingMatrix);
                 this._bombs.instanceMatrix.needsUpdate = true;
                 this._bombNotesIndex++;
-                this._liveBlocks.add({
+                this._liveBlocks.push({
                     blocks: this._bombs,
                     blocksIndex: blocksIndex,
+                    isBomb: true,
                 });
             } else {
                 break;
@@ -349,27 +421,63 @@ export default class SliceOfMusicSystem extends System {
         while(this._obstacleNotesIndex < this._obstacleNotes.length) {
             let note = this._obstacleNotes[this._obstacleNotesIndex];
             if(note.time < maxBeat) {
-                let blocksIndex = this._obstacles.count;
-                this._obstacles.count++;
-                let time = note.time * 60 / this._bpm;
-                let distance = -1 * this._noteJumpSpeed * time;
+                let blocksIndex = this._obstacles.counter;
+                this._obstacles.counter++;
+                this._obstacles.count = Math.min(this._obstacles.counter,
+                    this._obstacles.maxCount);
+                let distance = this._getNoteDistance(note.time);
                 workingMatrix.identity();
-                let depth = this._noteJumpSpeed * note.duration * 60 /this._bpm;
-                distance -= (depth - 0.4) / 2;
-                workingMatrix.makeScale(note.width, note.height, depth);
+                let depth = this._noteJumpSpeed * note.duration * 60
+                    / this._bpm;
+                distance -= (depth - GRID_DIMENSION) / 2;
+                workingMatrix.makeScale(note.width, note.height,
+                    depth / GRID_DIMENSION);
                 workingMatrix.setPosition(note.posX * GRID_DIMENSION,
                     note.posY * GRID_DIMENSION, distance);
                 this._obstacles.setMatrixAt(blocksIndex, workingMatrix);
                 this._obstacles.instanceMatrix.needsUpdate = true;
                 this._obstacleNotesIndex++;
-                this._liveBlocks.add({
+                this._liveObstacles.push({
                     blocks: this._obstacles,
                     blocksIndex: blocksIndex,
+                    depth: depth,
                 });
             } else {
                 break;
             }
         }
+    }
+
+    _getNoteDistance(beat) {
+        if(!this._bpmEvents.length) {
+            let time = beat * 60 / this._originalBpm;
+            return -1 * this._noteJumpSpeed * time;
+        } else {
+            let currentBeat = 0;
+            let currentDistance = 0;
+            let currentBpm = this._originalBpm;
+            for(let i = 0; i < this._bpmEvents.length; i++) {
+                let bpmEvent = this._bpmEvents[i];
+                if(bpmEvent.time >= beat) {
+                    break;
+                } else {
+                    let time = (bpmEvent.time - currentBeat) * 60 / currentBpm;
+                    currentDistance -= this._noteJumpSpeed * time;
+                    currentBpm = bpmEvent.bpm;
+                    currentBeat = bpmEvent.time;
+                }
+            }
+            let time = (beat - currentBeat) * 60 / currentBpm;
+            currentDistance -= this._noteJumpSpeed * time;
+            return currentDistance;
+        }
+    }
+
+    _updatePositions() {
+        let maxBeat = this._currentBeat + this._halfJumpDuration;
+        this._updateNotes(maxBeat);
+        this._updateBombs(maxBeat);
+        this._updateObstacles(maxBeat);
     }
 
     update(timeDelta) {
@@ -385,11 +493,21 @@ export default class SliceOfMusicSystem extends System {
             timeDelta = 0;
         }
         this._course.position.z += this._noteJumpSpeed * timeDelta;
-        this._currentBeat += timeDelta * this._bpm / 60;
-        let maxBeat = this._currentBeat + this._halfJumpDuration;
-        this._updateNotes(maxBeat);
-        this._updateBombs(maxBeat);
-        this._updateObstacles(maxBeat);
+        let currentBeat = this._currentBeat + timeDelta * this._bpm / 60;
+        while(this._bpmEventsIndex < this._bpmEvents.length) {
+            let bpmEvent = this._bpmEvents[this._bpmEventsIndex];
+            if(bpmEvent.time >= currentBeat) break;
+            currentBeat = this._currentBeat;
+            this._currentBeat = bpmEvent.time;
+            this._updatePositions();
+            timeDelta -= (this._currentBeat - currentBeat) * 60 / this._bpm;
+            currentBeat = this._currentBeat + timeDelta * this._bpm / 60;
+            this._bpm = bpmEvent.bpm;
+            this._bpmEventsIndex++;
+        }
+        this._currentBeat = currentBeat;
+        this._updatePositions();
+        this._checkCollisions();
     }
 
     static assetId = '98f2445f-df75-4ec6-82a0-7bb2cd23eb1c';
