@@ -5,11 +5,14 @@
  */
 
 import * as THREE from 'three';
+import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
 
-const { Assets, AudioHandler, ProjectHandler, PubSub, Scene, UserController, getDeviceType, isEditor } = window.DigitalBacon;
+const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, UserController, getDeviceType, isEditor } = window.DigitalBacon;
 const { System } = Assets;
+const { InputHandler } = DigitalBaconUI;
 import { loadBeatmap } from 'bsmap';
 const deviceType = getDeviceType();
+const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoder({ forceStereo: true });
 
 const AUDIO_QUANTITY = 10;
 const COMPONENT_ASSET_ID = 'b40ad677-1ec9-4ac0-9af6-8153a8b9f1e0';
@@ -17,6 +20,7 @@ const HJD_START = 4;
 const HJD_MIN = .25;
 const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
+const raycaster = new THREE.Raycaster(undefined, undefined, 0, 1);
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
     Math.PI,
@@ -46,7 +50,10 @@ export default class SliceOfMusicSystem extends System {
             SLICED_BOMB_AUDIO: 0,
         };
         this._playerHeight = 1.7;
+        this._setupHitBoxes();
         this._setupObstacles();
+        this._setupAudios();
+        this._rotationReads = 0;
     }
 
     _getDefaultName() {
@@ -173,6 +180,63 @@ export default class SliceOfMusicSystem extends System {
         this._leftSaber.object.traverse((node) => {
             node.renderOrder = 5;
         });
+        this._rightSaber.rotations = [];
+        this._rightSaber.tip = new THREE.Object3D();
+        this._rightSaber.tip.position.set(0, 1, 0);
+        this._rightSaber.tip.lastPosition = new THREE.Vector3();
+        this._rightSaber.tip.direction = new THREE.Vector3();
+        this._rightSaber.object.add(this._rightSaber.tip);
+        this._leftSaber.rotations = [];
+        this._leftSaber.tip = new THREE.Object3D();
+        this._leftSaber.tip.position.set(0, 1, 0);
+        this._leftSaber.tip.lastPosition = new THREE.Vector3();
+        this._leftSaber.tip.direction = new THREE.Vector3();
+        this._leftSaber.object.add(this._leftSaber.tip);
+    }
+
+    _setupHitBoxes() {
+        let material = new THREE.MeshBasicMaterial({
+            opacity: 0.25,
+            side: THREE.DoubleSide,
+            transparent: true,
+        });
+        let geometry = new THREE.BoxGeometry(0.5, 0.5, 0.9);
+        geometry.translate(0, 0, 0.15);
+        this._hitBox = new THREE.Mesh(geometry, material);
+        geometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        this._smallHitBox = new THREE.Mesh(geometry, material);
+        geometry = new THREE.SphereGeometry(0.2);
+        this._hitSphere = new THREE.Mesh(geometry, material);
+        this._hitBox.visible = false;
+        this._smallHitBox.visible = false;
+        this._hitSphere.visible = false;
+        Scene.object.add(this._hitBox);
+        Scene.object.add(this._smallHitBox);
+        Scene.object.add(this._hitSphere);
+    }
+
+    async _setupAudios(url) {
+        this._audioContext = AudioHandler.getListener().context;
+        this._hitAudio = await this._setupAudio('/assets/audio/HitSound.ogg');
+        this._missAudio = await this._setupAudio('/assets/audio/MissSound.ogg');
+        this._badHitAudio = await this._setupAudio(
+            '/assets/audio/BadHitSound.ogg');
+    }
+
+    async _setupAudio(url) {
+        let response = await fetch(url);
+        let audio = await response.arrayBuffer();
+        audio = new Uint8Array(audio);
+        await DECODER.ready;
+        audio = await DECODER.decode(audio);
+        await DECODER.reset();
+        let buffer = this._audioContext.createBuffer(
+            audio.channelData.length, audio.samplesDecoded,
+            audio.sampleRate);
+        for(let i = 0; i <  audio.channelData.length; i++) {
+            buffer.copyToChannel(audio.channelData[i], i);
+        }
+        return buffer;
     }
 
     _setColor(side, hex) {
@@ -185,17 +249,17 @@ export default class SliceOfMusicSystem extends System {
         //console.log(trackDetails);
         if(this._source) this._source.stop();
         let audio = trackDetails.data.audio;
-        let audioContext = AudioHandler.getListener().context;
-        if(audioContext.state === 'interrupted') await audioContext.resume();
-        let buffer = audioContext.createBuffer(
+        if(this._audioContext.state === 'interrupted')
+            await this._audioContext.resume();
+        let buffer = this._audioContext.createBuffer(
             audio.channelData.length, audio.samplesDecoded,
             audio.sampleRate);
         for(let i = 0; i <  audio.channelData.length; i++) {
             buffer.copyToChannel(audio.channelData[i], i);
         }
-        this._source = audioContext.createBufferSource();
+        this._source = this._audioContext.createBufferSource();
         this._source.buffer = buffer;
-        this._source.connect(audioContext.destination);
+        this._source.connect(this._audioContext.destination);
         this._source.onended = () => this._onTrackFinished();
         //If we want to track playback position, look into this thread
         //https://github.com/WebAudio/web-audio-api/issues/2397
@@ -247,6 +311,7 @@ export default class SliceOfMusicSystem extends System {
         this._circles.counter = 0;
         this._bombs.counter = 0;
         this._obstacles.counter = 0;
+        this._rotationReads = 0;
         this._pendingAudioStart = true;
         this._trackStarted = true;
     }
@@ -293,7 +358,14 @@ export default class SliceOfMusicSystem extends System {
         if(saber.parent != controller) {
             saber.parentId = controller?.id;
             saber.position = [0, 0, 0];
-            saber.rotation = [-90, 0, 0];
+            saber.rotation = [Math.PI / -2, 0, 0];
+            if(controller?.constructor?.name == 'XRController') {
+                let gamepad = InputHandler.getXRGamepad(side);
+                if(gamepad && gamepad.hapticActuators)
+                    saber.hapticActuators = gamepad.hapticActuators;
+            } else {
+                delete saber.hapticActuators;
+            }
         }
         let bones = controller?._modelObject?.motionController?.bones;
         if(bones) {
@@ -303,6 +375,12 @@ export default class SliceOfMusicSystem extends System {
             saber.object.lookAt(workingVector3);
             saber.object.rotateX(Math.PI / 2);
         }
+        if(this._rotationReads % 3 == 0)
+            saber.rotations.push(saber.object.rotation.toArray());
+        saber.object.updateMatrixWorld(true);
+        saber.tip.getWorldPosition(workingVector3);
+        saber.tip.direction.subVectors(workingVector3, saber.tip.lastPosition);
+        saber.tip.lastPosition.copy(workingVector3);
     }
 
     _checkCollisions() {
@@ -331,18 +409,63 @@ export default class SliceOfMusicSystem extends System {
             let details = this._liveBlocks[i];
             let z = this._getZ(details);
             if(z < -2) return;
+            if(details.passed) continue;
             if(z > 0.5) {
-                if(!details.passed) this._miss(details);
+                this._miss(details);
             } else {
-                //TODO: Check collision
+                if(!this._checkSaberCollision('right', details))
+                    this._checkSaberCollision('left', details);
             }
         }
+    }
+
+    _checkSaberCollision(side, details) {
+        let saber = this['_' + side + 'Saber'];
+        if(!saber || !saber.parent) return;
+        let hitObject = (details.isBomb)
+            ? this._hitSphere
+            : (details.side != side) ? this._smallHitBox : this._hitBox;
+        details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
+        workingVector3.setFromMatrixPosition(workingMatrix);
+        workingVector3.add(this._course.position);
+        hitObject.position.copy(workingVector3);
+        hitObject.rotation.setFromRotationMatrix(workingMatrix);
+        saber.object.getWorldPosition(workingVector3);
+        raycaster.ray.origin.copy(workingVector3);
+        raycaster.ray.direction.copy(
+            workingVector3.sub(saber.tip.lastPosition).negate());
+        let intersections = raycaster.intersectObject(hitObject);
+        if(intersections.length == 0) return false;
+        let point = hitObject.worldToLocal(intersections[0].point);
+        if(details.isBomb) {
+            this._hitBomb(details);
+        } else if(details.side != side) {
+            this._badHit(details, saber);
+        } else if(details.isAnyDirection) {
+            this._hitBlock(details, saber);
+        } else {
+            //Check direction
+            workingVector3.copy(saber.tip.direction);
+            workingVector3.add(hitObject.position);
+            hitObject.worldToLocal(workingVector3);
+            if(workingVector3.y < 0) {
+                this._hitBlock(details, saber);
+            } else {
+                this._smallHitBox.position.copy(this._hitBox.position);
+                this._smallHitBox.rotation.copy(this._hitBox.rotation);
+                intersections = raycaster.intersectObject(this._smallHitBox);
+                if(intersections.length == 0) return false;
+                this._badHit(details, saber);
+            }
+        }
+        return true;
     }
 
     _getZ(details) {
         details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
         workingVector3.setFromMatrixPosition(workingMatrix);
-        let z = this._course.position.z + workingVector3.z;
+        workingVector3.add(this._course.position);
+        let z = workingVector3.z;
         if(details.depth) z -= details.depth / 2;
         return z;
     }
@@ -350,7 +473,50 @@ export default class SliceOfMusicSystem extends System {
     _miss(details) {
         details.passed = true;
         if(details.isBomb) return;
-        //TODO: Play audio and update score/multiplier
+        let source = this._audioContext.createBufferSource();
+        source.buffer = this._missAudio;
+        source.connect(this._audioContext.destination);
+        source.start();
+        //TODO: Update score/multiplier
+    }
+
+    _hitBomb(details) {
+        details.passed = true;
+        let source = this._audioContext.createBufferSource();
+        source.buffer = this._badHitAudio;
+        source.connect(this._audioContext.destination);
+        source.start();
+        //TODO: Update score/multiplier
+        let hapticActuators = saber.hapticActuators;
+        if(!hapticActuators || hapticActuators.length == 0) return;
+        hapticActuators[0].pulse(.75, 100);
+    }
+
+    _badHit(details, saber) {
+        details.passed = true;
+        let source = this._audioContext.createBufferSource();
+        source.buffer = this._badHitAudio;
+        source.connect(this._audioContext.destination);
+        source.start();
+        //TODO: Update score/multiplier
+    }
+
+    _hitBlock(details, saber) {
+        details.passed = true;
+        workingMatrix.makeTranslation(0, -1000, 0);
+        details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
+        details.blocks.instanceMatrix.needsUpdate = true;
+        details.symbols.setMatrixAt(details.symbolsIndex, workingMatrix);
+        details.symbols.instanceMatrix.needsUpdate = true;
+        let source = this._audioContext.createBufferSource();
+        source.buffer = this._hitAudio;
+        source.connect(this._audioContext.destination);
+        source.start(0, 0.18);
+        //TODO: Update score/multiplier
+        let hapticActuators = saber.hapticActuators;
+        if(!hapticActuators || hapticActuators.length == 0) return;
+        hapticActuators[0].pulse(.25, 100);
+
     }
 
     _updateNotes(maxBeat) {
@@ -384,6 +550,8 @@ export default class SliceOfMusicSystem extends System {
                     blocksIndex: blocksIndex,
                     symbols: symbols,
                     symbolsIndex: symbolsIndex,
+                    isAnyDirection: note.direction == 8,
+                    side: (note.color == 0) ? 'left' : 'right',
                 });
             } else {
                 break;
@@ -484,6 +652,7 @@ export default class SliceOfMusicSystem extends System {
         if(deviceType == 'XR') {
             this._controllerCheck('left');
             this._controllerCheck('right');
+            this._rotationReads++;
         }
         if(!this._trackStarted) {
             return;

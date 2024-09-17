@@ -13,7 +13,6 @@ let componentTypes = {
 function loadAsset(path, assetName, optionalParams) {
     return new Promise((resolve, reject) => {
         LibraryHandler.loadAsset(path, (assetId) => {
-            if(optionalParams) optionalParams.assetId = assetId;
             assets[assetName] = ProjectHandler.addNewAsset(assetId,
                 optionalParams);
             resolve(assetId);
@@ -30,10 +29,8 @@ function loadAssets() {
         }
     }
     let promises = [];
-    promises.push(loadAsset('/models/block.glb', 'block',
-        { position: [0, -1000, 0] }));
-    promises.push(loadAsset('/models/bomb.glb', 'bomb',
-        { position: [0, -1000, 0] }));
+    promises.push(loadAsset('/assets/models/block.glb', 'block'));
+    promises.push(loadAsset('/assets/models/bomb.glb', 'bomb'));
     promises.push(loadAsset('/scripts/SliceOfMusicMenu.js', 'menu',
         { position: [0, 1.5, -1] }));
     promises.push(loadAsset('/scripts/SliceOfMusicSystem.js', 'system'));
@@ -51,6 +48,8 @@ function loadAssets() {
 }
 
 function configureAssets() {
+    assets.bomb.object.visible = false;
+    assets.block.object.visible = false;
     assets.block.object.traverse((node) => {
         if(node.name == 'Cube' && node.material.name == 'CubeMaterial') {
             node.material.emissiveIntensity = 0.3;

@@ -11,7 +11,7 @@ import { loadBeatmap } from 'bsmap';
 const { Assets, DigitalBaconUI, OrbitDisablingPointerInteractable, ProjectHandler, PubSub, getDeviceType, setKeyboardLock } = window.DigitalBacon;
 const { CustomAssetEntity } = Assets;
 const deviceType = getDeviceType();
-const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoder({ forceStereo: true });
+const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ forceStereo: true });
 
 const BODY_STYLE = new DigitalBaconUI.Style({
     borderRadius: 0.01,
@@ -293,7 +293,7 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
                     }));
             }
             promises.push(jsZip.file(info.audio.filename).async('uint8array')
-                .then((audio) => DECODER.decode(audio))
+                .then((audio) => DECODER.decodeFile(audio))
                 .then((audio) => {
                     itemData.audio = audio;
                     return DECODER.reset();
