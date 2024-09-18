@@ -33,6 +33,7 @@ function loadAssets() {
     promises.push(loadAsset('/assets/models/bomb.glb', 'bomb'));
     promises.push(loadAsset('/scripts/SliceOfMusicMenu.js', 'menu',
         { position: [0, 1.5, -1] }));
+    promises.push(loadAsset('/scripts/SliceOfMusicScore.js', 'score'));
     promises.push(loadAsset('/scripts/SliceOfMusicSystem.js', 'system'));
     Promise.all(promises).then(() => {
         LibraryHandler.loadAsset('/scripts/SliceOfMusicComponent.js',

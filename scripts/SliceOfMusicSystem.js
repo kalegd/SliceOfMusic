@@ -20,6 +20,8 @@ const HJD_START = 4;
 const HJD_MIN = .25;
 const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
+const workingQuaternion = new THREE.Quaternion();
+const workingQuaternion2 = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster(undefined, undefined, 0, 1);
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
@@ -54,6 +56,10 @@ export default class SliceOfMusicSystem extends System {
         this._setupObstacles();
         this._setupAudios();
         this._rotationReads = 0;
+        this._hitAudioBeats = {};
+        this._badHitAudioBeats = {};
+        this._missAudioBeats = {};
+        this._postSwingPendingCalculation = new Set();
     }
 
     _getDefaultName() {
@@ -311,6 +317,14 @@ export default class SliceOfMusicSystem extends System {
         this._circles.counter = 0;
         this._bombs.counter = 0;
         this._obstacles.counter = 0;
+        this._health = 0.5;
+        this._score = 0;
+        this._multiplier = 1;
+        this._hitsToNextMultiplier = 2;
+        this._hitAudioBeats = {};
+        this._badHitAudioBeats = {};
+        this._missAudioBeats = {};
+        this._postSwingPendingCalculation = new Set();
         this._rotationReads = 0;
         this._pendingAudioStart = true;
         this._trackStarted = true;
@@ -329,6 +343,12 @@ export default class SliceOfMusicSystem extends System {
     //https://github.com/KivalEvan/BeatSaber-MappingUtility/blob/main/src/bsmap/beatmap/helpers/njs.ts#L103-L105
     _calculateJumpDistance(bpm, njs, hjd) {
         return njs * (60 / bpm) * hjd * 2;
+    }
+
+    _lose() {
+        this._source.stop();
+        this._course.position.set(0, -1000, 0);
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:LOSE', this._score);
     }
 
     _onTrackFinished() {
@@ -376,7 +396,7 @@ export default class SliceOfMusicSystem extends System {
             saber.object.rotateX(Math.PI / 2);
         }
         if(this._rotationReads % 3 == 0)
-            saber.rotations.push(saber.object.rotation.toArray());
+            saber.rotations.push(saber.object.quaternion.toArray());
         saber.object.updateMatrixWorld(true);
         saber.tip.getWorldPosition(workingVector3);
         saber.tip.direction.subVectors(workingVector3, saber.tip.lastPosition);
@@ -438,18 +458,24 @@ export default class SliceOfMusicSystem extends System {
         if(intersections.length == 0) return false;
         let point = hitObject.worldToLocal(intersections[0].point);
         if(details.isBomb) {
-            this._hitBomb(details);
+            this._hitBomb(details, saber);
         } else if(details.side != side) {
             this._badHit(details, saber);
         } else if(details.isAnyDirection) {
-            this._hitBlock(details, saber);
+            workingVector3.copy(saber.tip.direction);
+            workingVector3.add(hitObject.position);
+            hitObject.worldToLocal(workingVector3);
+            let hitCenter = this._checkHitsCenter(saber, hitObject, point);
+            this._hitBlock(details, saber, hitCenter);
         } else {
             //Check direction
             workingVector3.copy(saber.tip.direction);
             workingVector3.add(hitObject.position);
             hitObject.worldToLocal(workingVector3);
             if(workingVector3.y < 0) {
-                this._hitBlock(details, saber);
+                let hitCenter = this._checkHitsCenter(saber, hitObject, point,
+                    workingVector3);
+                this._hitBlock(details, saber, hitCenter);
             } else {
                 this._smallHitBox.position.copy(this._hitBox.position);
                 this._smallHitBox.rotation.copy(this._hitBox.rotation);
@@ -459,6 +485,18 @@ export default class SliceOfMusicSystem extends System {
             }
         }
         return true;
+    }
+
+    _checkHitsCenter(saber, hitObject, point, direction) {
+        if(direction != workingVector3) {
+            workingVector3.copy(saber.tip.direction);
+            workingVector3.add(hitObject.position);
+            hitObject.worldToLocal(workingVector3);
+        }
+        hitObject.worldToLocal(point);
+        let multiplier = -1 * point.y / workingVector3.y;
+        let midX = point.x + workingVector3.x * multiplier;
+        return Math.abs(midX) < 0.25;
     }
 
     _getZ(details) {
@@ -473,50 +511,114 @@ export default class SliceOfMusicSystem extends System {
     _miss(details) {
         details.passed = true;
         if(details.isBomb) return;
-        let source = this._audioContext.createBufferSource();
-        source.buffer = this._missAudio;
-        source.connect(this._audioContext.destination);
-        source.start();
-        //TODO: Update score/multiplier
+        if(!this._missAudioBeats[details.beat]) {
+            let source = this._audioContext.createBufferSource();
+            source.buffer = this._missAudio;
+            source.connect(this._audioContext.destination);
+            source.start();
+            this._missAudioBeats[details.beat] = true;
+        }
+        this._decreaseMultiplier();
+        this._health = Math.max(0, this._health - 0.15);
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
+        if(this._health == 0) this._lose();
     }
 
-    _hitBomb(details) {
+    _hitBomb(details, saber) {
         details.passed = true;
-        let source = this._audioContext.createBufferSource();
-        source.buffer = this._badHitAudio;
-        source.connect(this._audioContext.destination);
-        source.start();
-        //TODO: Update score/multiplier
+        if(!this._badHitAudioBeats[details.beat]) {
+            let source = this._audioContext.createBufferSource();
+            source.buffer = this._badHitAudio;
+            source.connect(this._audioContext.destination);
+            source.start();
+            this._badHitAudioBeats[details.beat] = true;
+        }
+        this._health = Math.max(0, this._health - 0.15);
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
+        if(this._health == 0) this._lose();
+        this._decreaseMultiplier();
         let hapticActuators = saber.hapticActuators;
-        if(!hapticActuators || hapticActuators.length == 0) return;
-        hapticActuators[0].pulse(.75, 100);
+        if(hapticActuators && hapticActuators.length > 0)
+            hapticActuators[0].pulse(.75, 100);
     }
 
     _badHit(details, saber) {
         details.passed = true;
-        let source = this._audioContext.createBufferSource();
-        source.buffer = this._badHitAudio;
-        source.connect(this._audioContext.destination);
-        source.start();
-        //TODO: Update score/multiplier
+        if(!this._badHitAudioBeats[details.beat]) {
+            let source = this._audioContext.createBufferSource();
+            source.buffer = this._badHitAudio;
+            source.connect(this._audioContext.destination);
+            source.start();
+            this._badHitAudioBeats[details.beat] = true;
+        }
+        this._health = Math.max(0, this._health - 0.10);
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
+        this._decreaseMultiplier();
+        let hapticActuators = saber.hapticActuators;
+        if(hapticActuators && hapticActuators.length > 0)
+            hapticActuators[0].pulse(.25, 100);
+        if(this._health == 0) this._lose();
     }
 
-    _hitBlock(details, saber) {
+    _hitBlock(details, saber, hitCenter) {
         details.passed = true;
         workingMatrix.makeTranslation(0, -1000, 0);
         details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
         details.blocks.instanceMatrix.needsUpdate = true;
         details.symbols.setMatrixAt(details.symbolsIndex, workingMatrix);
         details.symbols.instanceMatrix.needsUpdate = true;
-        let source = this._audioContext.createBufferSource();
-        source.buffer = this._hitAudio;
-        source.connect(this._audioContext.destination);
-        source.start(0, 0.18);
-        //TODO: Update score/multiplier
+        if(!this._hitAudioBeats[details.beat]) {
+            let source = this._audioContext.createBufferSource();
+            source.buffer = this._hitAudio;
+            source.connect(this._audioContext.destination);
+            source.start(0, 0.18);
+            this._hitAudioBeats[details.beat] = true;
+        }
+        this._health = Math.min(1, this._health + 0.01);
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
+        if(this._multiplier != 8) {
+            this._hitsToNextMultiplier--;
+            if(this._hitsToNextMultiplier == 0) {
+                this._multiplier *= 2;
+                this._hitsToNextMultiplier = this._multiplier * 2;
+                PubSub.publish(this._id, 'SLICE_OF_MUSIC:MULTIPLIER',
+                    this._multiplier);
+            }
+        }
+        let hitRotation = saber.object.quaternion.toArray();
+        workingQuaternion.fromArray(hitRotation);
+        let rotationsIndex = saber.rotations.length;
+        let preSwingAngle = 0;
+        for(let i = rotationsIndex - 1; i >= 0; i--) {
+            workingQuaternion2.fromArray(saber.rotations[i]);
+            let angle = workingQuaternion.angleTo(workingQuaternion2);
+            if(angle < 0) console.log("Fuck");
+            if(angle <= preSwingAngle) break;
+            preSwingAngle = angle;
+        }
+        preSwingAngle *= 180 / Math.PI;
+        this._postSwingPendingCalculation.add({
+            saber: saber,
+            preSwingAngle: preSwingAngle,
+            hitCenter: hitCenter,
+            hitRotation: hitRotation,
+            rotationsIndex: rotationsIndex,
+            postSwingAngle: 0,
+            multiplier: this._multiplier,
+        });
         let hapticActuators = saber.hapticActuators;
-        if(!hapticActuators || hapticActuators.length == 0) return;
-        hapticActuators[0].pulse(.25, 100);
+        if(hapticActuators && hapticActuators.length > 0)
+            hapticActuators[0].pulse(.25, 100);
 
+    }
+
+    _decreaseMultiplier() {
+        if(this._multiplier > 1) {
+            this._multiplier /= 2;
+            PubSub.publish(this._id, 'SLICE_OF_MUSIC:MULTIPLIER',
+                this._multiplier);
+        }
+        this._hitsToNextMultiplier = this._multiplier * 2;
     }
 
     _updateNotes(maxBeat) {
@@ -552,6 +654,7 @@ export default class SliceOfMusicSystem extends System {
                     symbolsIndex: symbolsIndex,
                     isAnyDirection: note.direction == 8,
                     side: (note.color == 0) ? 'left' : 'right',
+                    beat: note.time,
                 });
             } else {
                 break;
@@ -577,6 +680,7 @@ export default class SliceOfMusicSystem extends System {
                 this._liveBlocks.push({
                     blocks: this._bombs,
                     blocksIndex: blocksIndex,
+                    beat: note.time,
                     isBomb: true,
                 });
             } else {
@@ -641,6 +745,30 @@ export default class SliceOfMusicSystem extends System {
         }
     }
 
+    _checkPostSwingPendingCalculations() {
+        for(let details of this._postSwingPendingCalculation) {
+            if(details.rotationsIndex >= details.saber.rotations.length)
+                continue;
+            workingQuaternion.fromArray(details.hitRotation);
+            workingQuaternion2.fromArray(
+                details.saber.rotations[details.rotationsIndex++]);
+            let angle = workingQuaternion.angleTo(workingQuaternion2);
+            if(details.postSwingAngle < angle) {
+                details.postSwingAngle = angle;
+            } else {
+                details.postSwingAngle *= 180 / Math.PI;
+                let score = (details.hitCenter) ? 15 : 0;
+                let preSwingScore = Math.floor(details.preSwingAngle / 100 *70);
+                let postSwingScore = Math.floor(details.postSwingAngle / 60*30);
+                score += Math.min(70, preSwingScore);
+                score += Math.min(30, postSwingScore);
+                this._score += score * details.multiplier;
+                this._postSwingPendingCalculation.delete(details);
+                PubSub.publish(this._id, 'SLICE_OF_MUSIC:SCORE', this._score);
+            }
+        }
+    }
+
     _updatePositions() {
         let maxBeat = this._currentBeat + this._halfJumpDuration;
         this._updateNotes(maxBeat);
@@ -652,6 +780,8 @@ export default class SliceOfMusicSystem extends System {
         if(deviceType == 'XR') {
             this._controllerCheck('left');
             this._controllerCheck('right');
+            if(this._rotationReads % 3 == 0)
+                this._checkPostSwingPendingCalculations();
             this._rotationReads++;
         }
         if(!this._trackStarted) {

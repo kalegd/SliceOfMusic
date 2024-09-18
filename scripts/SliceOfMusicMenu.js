@@ -29,6 +29,14 @@ const BIG_TEXT_STYLE = new DigitalBaconUI.Style({
     color: 0xffffff,
     fontSize: 0.05,
 });
+const BIG_BUTTON_STYLE = new DigitalBaconUI.Style({
+    backgroundVisible: true,
+    borderRadius: 0.05,
+    height: 0.1,
+    justifyContent: 'center',
+    materialColor: 0x222222,
+    width: 0.4,
+});
 const ORBIT_DISABLING_STYLE = new DigitalBaconUI.Style({
     pointerInteractableClassOverride: OrbitDisablingPointerInteractable,
 });
@@ -36,24 +44,26 @@ const PAGE_STYLE = new DigitalBaconUI.Style({ height: '100%', width: '99%' });
 const API_URL = 'https://api.beatsaver.com';
 const ZIP_CACHE = {};
 
+function createBackButton() {
+    let backButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
+        backgroundVisible: true,
+        borderRadius: 0.01,
+        materialColor: 0x222222,
+        margin: 0.02,
+        width: 0.06,
+    });
+    backButton.add(new DigitalBaconUI.Text('<', BIG_TEXT_STYLE));
+    backButton.pointerInteractable.addHoveredCallback((hovered) => {
+        backButton.materialColor = (hovered) ? 0x444444 : 0x222222;
+    });
+    return backButton;
+}
+
 class TrackPage extends DigitalBaconUI.Div {
     constructor(backHandler, ...styles) {
         super(...styles);
-        let topRow = new DigitalBaconUI.Span({
-            alignItems: 'start',
-            width: '100%',
-        });
-        let backButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
-            backgroundVisible: true,
-            borderRadius: 0.01,
-            materialColor: 0x222222,
-            margin: 0.02,
-            width: 0.06,
-        });
-        backButton.add(new DigitalBaconUI.Text('<', BIG_TEXT_STYLE));
-        backButton.pointerInteractable.addHoveredCallback((hovered) => {
-            backButton.materialColor = (hovered) ? 0x444444 : 0x222222;
-        });
+        let topRow = new DigitalBaconUI.Span({ width: '100%' });
+        let backButton = createBackButton();
         backButton.onClick = () => backHandler();
         this._title = new DigitalBaconUI.Text('', {
             color: 0xffffff,
@@ -71,20 +81,14 @@ class TrackPage extends DigitalBaconUI.Div {
             width: '50%',
         });
         this.add(this._difficultyDiv);
-        this._startButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
-            backgroundVisible: true,
-            borderRadius: 0.05,
-            height: 0.1,
-            justifyContent: 'center',
-            materialColor: 0x222222,
-            width: 0.4,
-        });
+        this._startButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
+            BIG_BUTTON_STYLE);
         this.add(this._startButton);
         this._startButton.add(new DigitalBaconUI.Text('Start', BIG_TEXT_STYLE));
         this._startButton.pointerInteractable.addHoveredCallback((hovered) => {
             this._startButton.materialColor = (hovered) ? 0x444444 : 0x222222;
         });
-        this._startButton.onClick = () => this._start();
+        this._startButton.onClick = () => this.start();
     }
 
     setTrack(track) {
@@ -118,7 +122,7 @@ class TrackPage extends DigitalBaconUI.Div {
         this._difficulties = [];
     }
 
-    _start() {
+    start() {
         console.log("Start game");
         PubSub.publish('SLICE_OF_MUSIC_TRACK_PAGE', 'SLICE_OF_MUSIC:START', {
             data: this._data,
@@ -143,13 +147,8 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
             this.remove(this._trackPage);
             this.add(this._searchPage);
         }, PAGE_STYLE);
-        this._pleaseWaitPage = new DigitalBaconUI.Div(PAGE_STYLE);
-        let pleaseWaitText = new DigitalBaconUI.Text('Please wait...', {
-            color: 0xffffff,
-            height: '100%',
-            fontSize: 0.05,
-        });
-        this._pleaseWaitPage.add(pleaseWaitText);
+        this._createPleaseWaitPage();
+        this._createLosePage();
         this._tracksDiv = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
             height: 0.68,
             overflow: 'scroll',
@@ -170,6 +169,54 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
         this._requestNumber = 0;
         this._search();
         if(deviceType == 'XR') this.onClick = () => {};
+    }
+
+    _createPleaseWaitPage() {
+        this._pleaseWaitPage = new DigitalBaconUI.Div(PAGE_STYLE);
+        let pleaseWaitText = new DigitalBaconUI.Text('Please wait...', {
+            color: 0xffffff,
+            height: '100%',
+            fontSize: 0.05,
+        });
+        this._pleaseWaitPage.add(pleaseWaitText);
+    }
+
+    _createLosePage() {
+        this._losePage = new DigitalBaconUI.Div(PAGE_STYLE, {
+            justifyContent: 'spaceBetween',
+            paddingBottom: 0.07,
+        });
+        let topRow = new DigitalBaconUI.Span({ width: '100%' });
+        let backButton = createBackButton();
+        backButton.onClick = () => {
+            this.remove(this._losePage);
+            this.add(this._trackPage);
+        };
+        let loseTitle = new DigitalBaconUI.Text('Better luck next time',
+            BIG_TEXT_STYLE, { width: 0.8 });
+        this._loseScore = new DigitalBaconUI.Text('Score: ', {
+            color: 0xffffff,
+            fontSize: 0.03,
+        });
+        let options = new DigitalBaconUI.Span();
+        let tryAgainButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
+            BIG_BUTTON_STYLE);
+        tryAgainButton.add(new DigitalBaconUI.Text('Try Again',BIG_TEXT_STYLE));
+        tryAgainButton.pointerInteractable.addHoveredCallback((hovered) => {
+            tryAgainButton.materialColor = (hovered) ? 0x444444 : 0x222222;
+        });
+        tryAgainButton.onClick = () => this._trackPage.start();
+        topRow.add(backButton);
+        topRow.add(loseTitle);
+        this._losePage.add(topRow);
+        this._losePage.add(this._loseScore);
+        this._losePage.add(tryAgainButton);
+    }
+
+    lose(score) {
+        this._loseScore.text = 'Score: ' + score;
+        this.remove(this._trackPage);
+        this.add(this._losePage);
     }
 
     _search(text) {
@@ -323,6 +370,9 @@ export default class SliceOfMusicMenu extends CustomAssetEntity {
         });
         PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:END', () => {
             this.object.add(this._menu);
+        });
+        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:LOSE', (score) => {
+            this._menu.lose(score);
         });
     }
 
