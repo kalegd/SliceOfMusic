@@ -4,10 +4,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import * as THREE from 'three';
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
 
-const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, UserController, getDeviceType, isEditor } = window.DigitalBacon;
+const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, THREE, UserController, getDeviceType, isEditor } = window.DigitalBacon;
 const { System } = Assets;
 const { InputHandler } = DigitalBaconUI;
 import { loadBeatmap } from 'bsmap';

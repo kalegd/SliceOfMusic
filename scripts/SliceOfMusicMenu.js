@@ -4,11 +4,10 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import * as THREE from 'three';
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
 import { loadBeatmap } from 'bsmap';
 
-const { Assets, DigitalBaconUI, OrbitDisablingPointerInteractable, ProjectHandler, PubSub, getDeviceType, setKeyboardLock } = window.DigitalBacon;
+const { Assets, DigitalBaconUI, OrbitDisablingPointerInteractable, ProjectHandler, PubSub, THREE, getDeviceType, setKeyboardLock } = window.DigitalBacon;
 const { CustomAssetEntity } = Assets;
 const deviceType = getDeviceType();
 const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ forceStereo: true });

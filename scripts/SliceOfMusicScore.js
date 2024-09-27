@@ -4,9 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import * as THREE from 'three';
-
-const { Assets, DigitalBaconUI, ProjectHandler, PubSub } = window.DigitalBacon;
+const { Assets, DigitalBaconUI, ProjectHandler, PubSub, THREE } = window.DigitalBacon;
 const { CustomAssetEntity } = Assets;
 
 const BODY_STYLE = new DigitalBaconUI.Style({
