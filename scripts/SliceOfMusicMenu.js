@@ -147,7 +147,7 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
             this.add(this._searchPage);
         }, PAGE_STYLE);
         this._createPleaseWaitPage();
-        this._createLosePage();
+        this._createFinishPage();
         this._tracksDiv = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
             height: 0.68,
             overflow: 'scroll',
@@ -180,42 +180,65 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
         this._pleaseWaitPage.add(pleaseWaitText);
     }
 
-    _createLosePage() {
-        this._losePage = new DigitalBaconUI.Div(PAGE_STYLE, {
+    _createFinishPage() {
+        this._scorePage = new DigitalBaconUI.Div(PAGE_STYLE, {
             justifyContent: 'spaceBetween',
             paddingBottom: 0.07,
         });
         let topRow = new DigitalBaconUI.Span({ width: '100%' });
         let backButton = createBackButton();
         backButton.onClick = () => {
-            this.remove(this._losePage);
+            this.remove(this._scorePage);
             this.add(this._trackPage);
         };
-        let loseTitle = new DigitalBaconUI.Text('Better luck next time',
+        this._scoreTitle = new DigitalBaconUI.Text('Better luck next time',
             BIG_TEXT_STYLE, { width: 0.8 });
-        this._loseScore = new DigitalBaconUI.Text('Score: ', {
+        this._rank = new DigitalBaconUI.Text('Rank: ', {
             color: 0xffffff,
             fontSize: 0.03,
         });
-        let options = new DigitalBaconUI.Span();
-        let tryAgainButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
-            BIG_BUTTON_STYLE);
-        tryAgainButton.add(new DigitalBaconUI.Text('Try Again',BIG_TEXT_STYLE));
-        tryAgainButton.pointerInteractable.addHoveredCallback((hovered) => {
-            tryAgainButton.materialColor = (hovered) ? 0x444444 : 0x222222;
+        this._score = new DigitalBaconUI.Text('Score: ', {
+            color: 0xffffff,
+            fontSize: 0.03,
         });
-        tryAgainButton.onClick = () => this._trackPage.start();
+        this._notesHit = new DigitalBaconUI.Text('Notes Hit: ', {
+            color: 0xffffff,
+            fontSize: 0.03,
+        });
+        let details = new DigitalBaconUI.Div();
+        let playAgainButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
+            BIG_BUTTON_STYLE);
+        this._playAgainButtonText = new DigitalBaconUI.Text('Try Again',
+            BIG_TEXT_STYLE);
+        playAgainButton.add(this._playAgainButtonText);
+        playAgainButton.pointerInteractable.addHoveredCallback((hovered) => {
+            playAgainButton.materialColor = (hovered) ? 0x444444 : 0x222222;
+        });
+        playAgainButton.onClick = () => this._trackPage.start();
         topRow.add(backButton);
-        topRow.add(loseTitle);
-        this._losePage.add(topRow);
-        this._losePage.add(this._loseScore);
-        this._losePage.add(tryAgainButton);
+        topRow.add(this._scoreTitle);
+        details.add(this._rank);
+        details.add(this._score);
+        details.add(this._notesHit);
+        this._scorePage.add(topRow);
+        this._scorePage.add(details);
+        this._scorePage.add(playAgainButton);
     }
 
-    lose(score) {
-        this._loseScore.text = 'Score: ' + score;
+    setScore(details) {
+        let { score, rank, totalNotes, notesHit } = details;
+        if(rank == 'F') {
+            this._scoreTitle.text = 'Better luck next time';
+            this._playAgainButtonText.text = 'Try Again';
+        } else {
+            this._scoreTitle.text = 'Nice job!';
+            this._playAgainButtonText.text = 'Play Again';
+        }
+        this._rank.text = 'Rank: ' + rank;
+        this._score.text = 'Score: ' + score;
+        this._notesHit.text = 'Notes Hit: ' + notesHit + '/' + totalNotes;
         this.remove(this._trackPage);
-        this.add(this._losePage);
+        this.add(this._scorePage);
     }
 
     _search(text) {
@@ -367,11 +390,9 @@ export default class SliceOfMusicMenu extends CustomAssetEntity {
         PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:START', () => {
             this.object.remove(this._menu);
         });
-        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:END', () => {
+        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:END', (details) => {
+            this._menu.setScore(details);
             this.object.add(this._menu);
-        });
-        PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:LOSE', (score) => {
-            this._menu.lose(score);
         });
     }
 

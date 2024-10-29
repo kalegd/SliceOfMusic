@@ -43,7 +43,7 @@ export default class SliceOfMusicScore extends CustomAssetEntity {
             color: 0xffffff,
             fontSize: 0.1,
         });
-        this._multiplierText = new DigitalBaconUI.Text('8X', {
+        this._multiplierText = new DigitalBaconUI.Text('1X', {
             color: 0xffffff,
             fontSize: 0.1,
         });
@@ -55,6 +55,8 @@ export default class SliceOfMusicScore extends CustomAssetEntity {
         this._healthBar.position.set(0, 0.01, -2);
         this._healthBar.rotation.set(-Math.PI / 2, 0, 0);
         PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:START', () => {
+            this._scoreText.text = '0';
+            this._multiplierText.text = '1X';
             this._healthBar.setPercent(0.5);
             this.object.add(this._scoreText);
             this.object.add(this._multiplierText);

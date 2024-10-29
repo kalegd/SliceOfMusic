@@ -300,6 +300,7 @@ export default class SliceOfMusicSystem extends System {
         this._obstacleNotesIndex = 0;
         this._bpmEventsIndex = 0;
         this._collisionsIndex = 0;
+        this._colorNotesHit = 0;
         this._liveBlocks = [];
         this._liveObstacles = [];
         this._course.position.set(GRID_DIMENSION * -1.5, this._playerHeight - GRID_DIMENSION * 2, -1.5);
@@ -327,6 +328,21 @@ export default class SliceOfMusicSystem extends System {
         this._rotationReads = 0;
         this._pendingAudioStart = true;
         this._trackStarted = true;
+
+        this._maxScore = this._calculateMaxScore(this._colorNotes.length);
+    }
+
+    _calculateMaxScore(totalNotes) {
+        let maxScore = 0;
+        let multiplier = 1;
+        while(totalNotes) {
+            let subtractedNotes = (multiplier == 8)
+                ? totalNotes
+                : Math.min(multiplier * 2, totalNotes);
+            maxScore += subtractedNotes * multiplier;
+            totalNotes -= subtractedNotes;
+            multiplier *= 2;
+        }
     }
 
     //https://github.com/KivalEvan/BeatSaber-MappingUtility/blob/main/src/bsmap/beatmap/helpers/njs.ts#L64-L72
@@ -345,14 +361,35 @@ export default class SliceOfMusicSystem extends System {
     }
 
     _lose() {
+        this._lost = true;
         this._source.stop();
         this._course.position.set(0, -1000, 0);
-        PubSub.publish(this._id, 'SLICE_OF_MUSIC:LOSE', this._score);
     }
 
     _onTrackFinished() {
         this._trackStarted = false;
-        PubSub.publish(this._id, 'SLICE_OF_MUSIC:END', {});
+        let rank = this._calculateRank();
+        PubSub.publish(this._id, 'SLICE_OF_MUSIC:END', {
+            score: this._score,
+            rank: rank,
+            notesHit: this._colorNotesHit,
+            totalNotes: this._colorNotes.length,
+        });
+    }
+
+    _calculateRank() {
+        let percent = this._score / this._maxScore;
+        let rank;
+        if(this._lost) rank = 'F';
+            else if(percent == 1) rank = 'SSS';
+            else if(percent >= 0.9) rank = 'SS';
+            else if(percent >= 0.8) rank = 'S';
+            else if(percent >= 0.65) rank = 'A';
+            else if(percent >= 0.5) rank = 'B';
+            else if(percent >= 0.35) rank = 'C';
+            else if(percent >= 0.2) rank = 'D';
+            else rank = 'E';
+        return rank;
     }
 
     onAddToProject() {
@@ -573,6 +610,7 @@ export default class SliceOfMusicSystem extends System {
             source.start(0, 0.18);
             this._hitAudioBeats[details.beat] = true;
         }
+        this._colorNotesHit += 1;
         this._health = Math.min(1, this._health + 0.01);
         PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
         if(this._multiplier != 8) {
@@ -608,7 +646,6 @@ export default class SliceOfMusicSystem extends System {
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
             hapticActuators[0].pulse(.25, 100);
-
     }
 
     _decreaseMultiplier() {
