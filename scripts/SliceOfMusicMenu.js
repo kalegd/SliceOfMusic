@@ -7,11 +7,12 @@
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
 import { loadBeatmap } from 'bsmap';
 
-const { API_URL, BIG_BUTTON_STYLE, BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE, ZIP_CACHE } = await import(location.origin + '/scripts/constants.js');
+const { BIG_BUTTON_STYLE, BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE, ZIP_CACHE } = await import(location.origin + '/scripts/constants.js');
 const { createBackButton } = await import(location.origin + '/scripts/utils.js');
+const { 'default': SearchPage } = await import(location.origin + '/scripts/SearchPage.js');
 const { 'default': TrackPage } = await import(location.origin + '/scripts/TrackPage.js');
 
-const { Assets, DigitalBaconUI, ProjectHandler, PubSub, getDeviceType, setKeyboardLock } = window.DigitalBacon;
+const { Assets, DigitalBaconUI, ProjectHandler, PubSub, getDeviceType } = window.DigitalBacon;
 const { CustomAssetEntity } = Assets;
 const deviceType = getDeviceType();
 const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ forceStereo: true });
@@ -19,40 +20,14 @@ const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ for
 class _SliceOfMusicMenu extends DigitalBaconUI.Body {
     constructor() {
         super(BODY_STYLE);
-        this._searchInput = new DigitalBaconUI.TextInput({
-            borderRadius: 0.025,
-            fontSize: 0.025,
-            height: 0.05,
-            marginBottom: 0.01,
-            marginTop: 0.01,
-            width: '90%',
-        });
-        this._searchPage = new DigitalBaconUI.Div(PAGE_STYLE);
+        this._searchPage = new SearchPage(this, PAGE_STYLE);
         this._trackPage = new TrackPage(() => {
             this.remove(this._trackPage);
             this.add(this._searchPage);
         }, PAGE_STYLE);
         this._createPleaseWaitPage();
         this._createFinishPage();
-        this._tracksDiv = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE, {
-            height: 0.68,
-            overflow: 'scroll',
-            width: '100%',
-        });
-        this._trackSpans = [];
-        this._searchInput.placeholder = 'Search';
-        this._searchInput.pointerInteractable.hoveredCursor = 'text';
-        this._searchInput.onEnter = () => this._searchInput.blur();
-        this._searchInput.onFocus = () => setKeyboardLock(true);
-        this._searchInput.onBlur = () => {
-            setKeyboardLock(false);
-            this._search(this._searchInput.value);
-        };
         this.add(this._searchPage);
-        this._searchPage.add(this._searchInput);
-        this._searchPage.add(this._tracksDiv);
-        this._requestNumber = 0;
-        this._search();
         if(deviceType == 'XR') this.onClick = () => {};
     }
 
@@ -127,78 +102,7 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
         this.add(this._scorePage);
     }
 
-    _search(text) {
-        this._requestNumber++;
-        let requestNumber = this._requestNumber;
-        let url = API_URL + '/search/text/0?leaderboard=All&';
-        url += (text)
-            ? 'sortOrder=Relevance&q=' + encodeURIComponent(text)
-            : 'sortOrder=Latest';
-        fetch(url, {
-            method: "GET",
-        }).then((result) => result.json()).then((response) => {
-            if(this._requestNumber != requestNumber) return;
-            this._displayResults(response.docs);
-        }).catch((err) => {
-            console.error('Something went wrong when trying to fetch latest playlists');
-            console.error(err);
-            //TODO: Let user know there was an error
-        });
-    }
-
-    _displayResults(results) {
-        this._clearSearch();
-        for(let item of results) {
-            let trackSpan = this._createTrackSpan(item);
-            this._tracksDiv.add(trackSpan);
-            this._trackSpans.push(trackSpan);
-        }
-    }
-
-    _clearSearch() {
-        for(let span of this._trackSpans) {
-            this._tracksDiv.remove(span);
-        }
-        this._trackSpans = [];
-    }
-
-    _createTrackSpan(item) {
-        let span = new DigitalBaconUI.Span(ORBIT_DISABLING_STYLE, {
-            alignItems: 'start',
-            backgroundVisible: true,
-            height: 0.15,
-            materialColor: 0x000000,
-            padding: 0.01,
-            width:'100%',
-        });
-        let div = new DigitalBaconUI.Div({
-            alignItems: 'start',
-            height: '100%',
-            padding: 0.01,
-            width:'100%',
-        });
-        let albumImage = new DigitalBaconUI.Image(item.versions[0].coverURL,
-            { height: '100%' });
-        let titleText = new DigitalBaconUI.Text(item.name, TEXT_STYLE);
-        let artistText = new DigitalBaconUI.Text(item.uploader.name,TEXT_STYLE);
-        let difficulties = item.versions[0].diffs
-            .map((diff) => diff.difficulty)
-            .filter((value, index, array) => array.indexOf(value) === index)
-            .join(' | ');
-        let difficultiesText = new DigitalBaconUI.Text(difficulties,TEXT_STYLE);
-        div.add(titleText);
-        div.add(artistText);
-        div.add(difficultiesText);
-        span.add(albumImage);
-        span.add(div);
-        span.onClick = () => this._select(item);
-        span.pointerInteractable.addHoveredCallback((hovered) => {
-            span.materialColor = (hovered) ? 0x222222 : 0x000000;
-        });
-        return span;
-    }
-
-    _select(item) {
+    selectTrack(item) {
         this.remove(this._searchPage);
         if(ZIP_CACHE[item.id]) {
             this.add(this._trackPage);
