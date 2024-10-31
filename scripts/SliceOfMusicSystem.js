@@ -5,6 +5,7 @@
  */
 
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
+const { 'default': ModifiersMenu } = await import(location.origin + '/scripts/ModifiersMenu.js');
 
 const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, THREE, UserController, getDeviceType, isEditor } = window.DigitalBacon;
 const { System } = Assets;
@@ -59,6 +60,9 @@ export default class SliceOfMusicSystem extends System {
         this._badHitAudioBeats = {};
         this._missAudioBeats = {};
         this._postSwingPendingCalculation = new Set();
+        ModifiersMenu.onColorChange = (side, color) => {
+            this._setColor(side, color);
+        };
     }
 
     _getDefaultName() {
@@ -129,6 +133,10 @@ export default class SliceOfMusicSystem extends System {
         this._rightBlocks.frustumCulled = false;
         this._arrows.frustumCulled = false;
         this._circles.frustumCulled = false;
+        if(this._leftSaber) {
+            this._setColor('left', ModifiersMenu.leftColor.getHex());
+            this._setColor('right', ModifiersMenu.rightColor.getHex());
+        }
     }
 
     _setupBombs(instance) {
@@ -160,8 +168,8 @@ export default class SliceOfMusicSystem extends System {
     _setupSabers(instance) {
         this._rightSaber = instance;
         this._leftSaber = instance.clone(true);
-        this._rightSaber.position = [1, 1, -1];
-        this._leftSaber.position = [-1, 1, -1];
+        this._rightSaber.position = [1.1, 1.1, -0.5];
+        this._leftSaber.position = [-1.1, 1.1, -0.5];
         for(let child of this._rightSaber.children) {
             if(child.name == 'Saber Blade') {
                 this._rightSaberMaterial = ProjectHandler.getAsset(
@@ -197,6 +205,10 @@ export default class SliceOfMusicSystem extends System {
         this._leftSaber.tip.lastPosition = new THREE.Vector3();
         this._leftSaber.tip.direction = new THREE.Vector3();
         this._leftSaber.object.add(this._leftSaber.tip);
+        if(this._course) {
+            this._setColor('left', ModifiersMenu.leftColor.getHex());
+            this._setColor('right', ModifiersMenu.rightColor.getHex());
+        }
     }
 
     _setupHitBoxes() {
@@ -271,8 +283,6 @@ export default class SliceOfMusicSystem extends System {
         let info = trackDetails.data.difficultyInfo[trackDetails.difficulty];
         let mapDetails =trackDetails.data.difficulties[trackDetails.difficulty];
         this._setupCourse(trackDetails, info, mapDetails);
-        this._setColor('left', 0xff00ff);
-        this._setColor('right', 0x00ffff);
         Scene.object.add(this._course);
         //console.log(info);
         console.log(mapDetails);
@@ -326,6 +336,7 @@ export default class SliceOfMusicSystem extends System {
         this._missAudioBeats = {};
         this._postSwingPendingCalculation = new Set();
         this._rotationReads = 0;
+        this._lost = false;
         this._pendingAudioStart = true;
         this._trackStarted = true;
 
@@ -557,7 +568,7 @@ export default class SliceOfMusicSystem extends System {
         this._decreaseMultiplier();
         this._health = Math.max(0, this._health - 0.15);
         PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
-        if(this._health == 0) this._lose();
+        if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
     }
 
     _hitBomb(details, saber) {
@@ -571,7 +582,7 @@ export default class SliceOfMusicSystem extends System {
         }
         this._health = Math.max(0, this._health - 0.15);
         PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
-        if(this._health == 0) this._lose();
+        if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
         this._decreaseMultiplier();
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
@@ -593,7 +604,7 @@ export default class SliceOfMusicSystem extends System {
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
             hapticActuators[0].pulse(.25, 100);
-        if(this._health == 0) this._lose();
+        if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
     }
 
     _hitBlock(details, saber, hitCenter) {

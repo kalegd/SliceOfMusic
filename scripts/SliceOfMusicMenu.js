@@ -9,6 +9,8 @@ import { loadBeatmap } from 'bsmap';
 
 const { BIG_BUTTON_STYLE, BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE, ZIP_CACHE } = await import(location.origin + '/scripts/constants.js');
 const { createBackButton } = await import(location.origin + '/scripts/utils.js');
+const { 'default': SponsorsMenu } = await import(location.origin + '/scripts/SponsorsMenu.js');
+const { 'default': ModifiersMenu } = await import(location.origin + '/scripts/ModifiersMenu.js');
 const { 'default': SearchPage } = await import(location.origin + '/scripts/SearchPage.js');
 const { 'default': TrackPage } = await import(location.origin + '/scripts/TrackPage.js');
 
@@ -16,6 +18,7 @@ const { Assets, DigitalBaconUI, ProjectHandler, PubSub, getDeviceType } = window
 const { CustomAssetEntity } = Assets;
 const deviceType = getDeviceType();
 const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ forceStereo: true });
+const logoImagePath = '/assets/images/slice_of_music.jpg';
 
 class _SliceOfMusicMenu extends DigitalBaconUI.Body {
     constructor() {
@@ -176,7 +179,16 @@ export default class SliceOfMusicMenu extends CustomAssetEntity {
         params['assetId'] = SliceOfMusicMenu.assetId;
         super(params);
         this._menu = new _SliceOfMusicMenu();
+        this._modifiersMenu = ModifiersMenu;
+        this._modifiersMenu.position.set(0.8, 0, 0.23);
+        this._modifiersMenu.rotation.set(0, -40 * Math.PI / 180, 0);
+        this._sponsorsMenu = new SponsorsMenu();
+        this._sponsorsMenu.position.set(-0.8, 0, 0.23);
+        this._sponsorsMenu.rotation.set(0, 40 * Math.PI / 180, 0);
         this.object.add(this._menu);
+        this._menu.add(this._modifiersMenu);
+        this._menu.add(this._sponsorsMenu);
+        this._createLogo();
         PubSub.subscribe(this._id, 'SLICE_OF_MUSIC:START', () => {
             this.object.remove(this._menu);
         });
@@ -184,6 +196,30 @@ export default class SliceOfMusicMenu extends CustomAssetEntity {
             this._menu.setScore(details);
             this.object.add(this._menu);
         });
+    }
+
+    _createLogo() {
+        this._logo = new DigitalBaconUI.Span({
+            backgroundVisible: true,
+            borderRadius: 0.01,
+            height: 0.1,
+            materialColor: 0,
+            padding: 0.01,
+            paddingLeft: 0.02,
+            paddingRight: 0.02,
+        });
+        let image = new DigitalBaconUI.Image(logoImagePath,
+            { height: '100%' });
+        let image2 = new DigitalBaconUI.Image(logoImagePath,
+            { height: '100%' });
+        let text = new DigitalBaconUI.Text('Slice of Music', BIG_TEXT_STYLE,
+            { fontSize: 0.05, margin: 0.02 });
+        this._logo.add(image);
+        this._logo.add(text);
+        this._logo.add(image2);
+        this._logo.position.set(0, 0.43, 0);
+        this._logo.bypassContentPositioning = true;
+        this._menu.add(this._logo);
     }
 
     _getDefaultName() {
