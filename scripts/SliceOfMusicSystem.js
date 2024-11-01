@@ -7,7 +7,7 @@
 import * as OggVorbisDecoder from 'https://cdn.jsdelivr.net/npm/@wasm-audio-decoders/ogg-vorbis@0.1.15/dist/ogg-vorbis-decoder.min.js';
 const { 'default': ModifiersMenu } = await import(location.origin + '/scripts/ModifiersMenu.js');
 
-const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, THREE, UserController, getDeviceType, isEditor } = window.DigitalBacon;
+const { Assets, AudioHandler, DigitalBaconUI, ProjectHandler, PubSub, Scene, THREE, UserController, getCamera, getDeviceType, isEditor } = window.DigitalBacon;
 const { System } = Assets;
 const { InputHandler } = DigitalBaconUI;
 import { loadBeatmap } from 'bsmap';
@@ -20,6 +20,7 @@ const HJD_START = 4;
 const HJD_MIN = .25;
 const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
+const workingVector3b = new THREE.Vector3();
 const workingQuaternion = new THREE.Quaternion();
 const workingQuaternion2 = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster(undefined, undefined, 0, 1);
@@ -238,6 +239,13 @@ export default class SliceOfMusicSystem extends System {
         this._missAudio = await this._setupAudio('/assets/audio/MissSound.ogg');
         this._badHitAudio = await this._setupAudio(
             '/assets/audio/BadHitSound.ogg');
+        this._gainNode = this._audioContext.createGain();
+        this._gainNode.gain.value = 0.2;
+        this._gainNode.connect(this._audioContext.destination);
+        this._lowpassFilter = this._audioContext.createBiquadFilter();
+        this._lowpassFilter.type = 'lowpass';
+        this._lowpassFilter.frequency.value = 500;
+        this._lowpassFilter.connect(this._audioContext.destination);
     }
 
     async _setupAudio(url) {
@@ -336,9 +344,11 @@ export default class SliceOfMusicSystem extends System {
         this._hitAudioBeats = {};
         this._badHitAudioBeats = {};
         this._missAudioBeats = {};
+        this._obstaclesHit = new Set();
         this._postSwingPendingCalculation = new Set();
         this._rotationReads = 0;
         this._lost = false;
+        this._inObstacle = false;
         this._pendingAudioStart = true;
         this._trackStarted = true;
 
@@ -452,7 +462,7 @@ export default class SliceOfMusicSystem extends System {
         saber.tip.lastPosition.copy(workingVector3);
     }
 
-    _checkCollisions() {
+    _checkCollisions(timeDelta) {
         while(this._liveBlocks.length && this._getZ(this._liveBlocks[0]) > 2) {
             let details = this._liveBlocks[0];
             workingMatrix.makeTranslation(0, -1000, 0);
@@ -477,7 +487,7 @@ export default class SliceOfMusicSystem extends System {
         for(let i = this._collisionsIndex; i < this._liveBlocks.length; i++) {
             let details = this._liveBlocks[i];
             let z = this._getZ(details);
-            if(z < -2) return;
+            if(z < -2) break;
             if(details.passed) continue;
             if(z > 0.5) {
                 this._miss(details);
@@ -486,6 +496,47 @@ export default class SliceOfMusicSystem extends System {
                     this._checkSaberCollision('left', details);
             }
         }
+
+        let inObstacle = false;
+        for(let i = 0; i < this._liveObstacles.length; i++) {
+            let details = this._liveObstacles[0];
+            let z = this._getZ(details);
+            if(z < -2) break;
+            if(details.passed) continue;
+            if(this._checkHeadCollision(details, timeDelta)) {
+                if(!this._obstaclesHit.has(details)) {
+                    this._decreaseMultiplier();
+                    this._obstaclesHit.add(details);
+                }
+                inObstacle = true;
+                this._health = Math.max(0, this._health - 1.3 * timeDelta);
+                PubSub.publish(this._id, 'SLICE_OF_MUSIC:HEALTH', this._health);
+                if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
+                break;
+            }
+        }
+        if(this._inObstacle != inObstacle) {
+            this._inObstacle = inObstacle;
+            if(inObstacle) {
+                this._source.disconnect(this._audioContext.destination);
+                this._source.connect(this._lowpassFilter);
+            } else {
+                this._source.disconnect(this._lowpassFilter);
+                this._source.connect(this._audioContext.destination);
+            }
+        }
+    }
+
+    _checkHeadCollision(details) {
+        let camera = getCamera();
+        camera.getWorldPosition(workingVector3);
+        details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
+        workingVector3b.setFromMatrixPosition(workingMatrix);
+        workingVector3b.add(this._course.position);
+        workingVector3.sub(workingVector3b);
+        return (Math.abs(workingVector3.x) < details.width &&
+                Math.abs(workingVector3.y) < details.height &&
+                Math.abs(workingVector3.z) < details.depth);
     }
 
     _checkSaberCollision(side, details) {
@@ -563,7 +614,7 @@ export default class SliceOfMusicSystem extends System {
         if(!this._missAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._missAudio;
-            source.connect(this._audioContext.destination);
+            source.connect(this._gainNode);
             source.start();
             this._missAudioBeats[details.beat] = true;
         }
@@ -578,7 +629,7 @@ export default class SliceOfMusicSystem extends System {
         if(!this._badHitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._badHitAudio;
-            source.connect(this._audioContext.destination);
+            source.connect(this._gainNode);
             source.start();
             this._badHitAudioBeats[details.beat] = true;
         }
@@ -596,7 +647,7 @@ export default class SliceOfMusicSystem extends System {
         if(!this._badHitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._badHitAudio;
-            source.connect(this._audioContext.destination);
+            source.connect(this._gainNode);
             source.start();
             this._badHitAudioBeats[details.beat] = true;
         }
@@ -619,7 +670,7 @@ export default class SliceOfMusicSystem extends System {
         if(!this._hitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._hitAudio;
-            source.connect(this._audioContext.destination);
+            source.connect(this._gainNode);
             source.start(0, 0.18);
             this._hitAudioBeats[details.beat] = true;
         }
@@ -762,6 +813,8 @@ export default class SliceOfMusicSystem extends System {
                     blocks: this._obstacles,
                     blocksIndex: blocksIndex,
                     depth: depth,
+                    height: note.height * GRID_DIMENSION,
+                    width: note.width * GRID_DIMENSION,
                 });
             } else {
                 break;
@@ -855,7 +908,7 @@ export default class SliceOfMusicSystem extends System {
         }
         this._currentBeat = currentBeat;
         this._updatePositions();
-        this._checkCollisions();
+        this._checkCollisions(timeDelta);
     }
 
     static assetId = '98f2445f-df75-4ec6-82a0-7bb2cd23eb1c';
