@@ -27,8 +27,9 @@ export default class TrackPage extends DigitalBaconUI.Div {
         this._difficultyDiv = new DigitalBaconUI.Div({
             alignItems: 'start',
             height: 0.475,
+            overflow: 'scroll',
             width: '50%',
-        });
+        }, ORBIT_DISABLING_STYLE);
         this.add(this._difficultyDiv);
         this._startButton = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
             BIG_BUTTON_STYLE);

@@ -42,7 +42,7 @@ export default class SearchPage extends DigitalBaconUI.Div {
     _search(text) {
         this._requestNumber++;
         let requestNumber = this._requestNumber;
-        let url = API_URL + '/search/text/0?leaderboard=All&';
+        let url = API_URL + '/search/text/0?leaderboard=All&noodle=false&';
         url += (text)
             ? 'sortOrder=Relevance&q=' + encodeURIComponent(text)
             : 'sortOrder=Latest';

@@ -197,13 +197,13 @@ export default class SliceOfMusicSystem extends System {
         this._rightSaber.rotations = [];
         this._rightSaber.tip = new THREE.Object3D();
         this._rightSaber.tip.position.set(0, 1, 0);
-        this._rightSaber.tip.lastPosition = new THREE.Vector3();
+        this._rightSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
         this._rightSaber.tip.direction = new THREE.Vector3();
         this._rightSaber.object.add(this._rightSaber.tip);
         this._leftSaber.rotations = [];
         this._leftSaber.tip = new THREE.Object3D();
         this._leftSaber.tip.position.set(0, 1, 0);
-        this._leftSaber.tip.lastPosition = new THREE.Vector3();
+        this._leftSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
         this._leftSaber.tip.direction = new THREE.Vector3();
         this._leftSaber.object.add(this._leftSaber.tip);
         if(this._course) {
@@ -218,8 +218,8 @@ export default class SliceOfMusicSystem extends System {
             side: THREE.DoubleSide,
             transparent: true,
         });
-        let geometry = new THREE.BoxGeometry(0.5, 0.5, 0.9);
-        geometry.translate(0, 0, 0.15);
+        let geometry = new THREE.BoxGeometry(0.8, 0.5, 1);
+        geometry.translate(0, 0, 0.25);
         this._hitBox = new THREE.Mesh(geometry, material);
         geometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
         this._smallHitBox = new THREE.Mesh(geometry, material);
