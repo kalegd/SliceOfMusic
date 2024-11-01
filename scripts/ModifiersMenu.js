@@ -1,5 +1,5 @@
-const { DigitalBaconUI, THREE } = window.DigitalBacon;
-const { Body, Div, HSLColor, Span, Style, Text } = DigitalBaconUI;
+const { DigitalBaconUI, THREE, setKeyboardLock } = window.DigitalBacon;
+const { Body, Checkbox, Div, HSLColor, NumberInput, Span, Style, Text } = DigitalBaconUI;
 
 const { BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE } = await import(location.origin + '/scripts/constants.js');
 //Need a question mark at the end of the utils url because of Safari being dumb.
@@ -25,6 +25,8 @@ const HSL = {};
 class ModifiersMenu extends Body {
     constructor(params = {}) {
         super(BODY_STYLE, { width: 0.66 });
+        this.njs = 16;
+        this.njsOverrideEnabled = false;
         this.neverFail = false;
         this.leftColor = new THREE.Color(0xff00ff);
         this.rightColor = new THREE.Color(0x00ffff);
@@ -99,9 +101,18 @@ class ModifiersMenu extends Body {
 
     _createColorRow(side, color) {
         let capitalizedSide = side.charAt(0).toUpperCase() + side.slice(1);
-        let row = new Span({ justifyContent: 'spaceAround', width: '100%'});
-        let title = new Text(capitalizedSide + ' Side', TEXT_STYLE);
-        let hslColor = this._createHSLColor(side, this.leftColor);
+        let row = new Span({
+            backgroundVisible: true,
+            borderRadius: 0.01,
+            justifyContent: 'spaceAround',
+            marginTop: 0.025,
+            materialColor: 0x222222,
+            padding: 0.02,
+            width: '100%',
+        });
+        let title = new Text(capitalizedSide + ' Side', TEXT_STYLE,
+            { fontSize: 0.04 });
+        let hslColor = this._createHSLColor(side, color);
         row.add(title);
         row.add(hslColor.hueSaturationWheel);
         row.add(hslColor.lightnessBar);
@@ -128,7 +139,44 @@ class ModifiersMenu extends Body {
         };
         topRow.add(backButton);
         topRow.add(title);
+        let enabledRow = new Span(
+            { justifyContent: 'spaceBetween', marginTop: 0.025, width: 0.5 });
+        let enabledTitle = new Text('Override', TEXT_STYLE,
+            { fontSize: 0.04 });
+        let checkbox = new Checkbox({
+            height: 0.06,
+            width: 0.06,
+        }, ORBIT_DISABLING_STYLE);
+        enabledRow.add(enabledTitle);
+        enabledRow.add(checkbox);
+        let numberRow = new Span(
+            { justifyContent: 'spaceBetween', marginTop: 0.025, width: 0.5 });
+        let numberTitle = new Text('Value', TEXT_STYLE,
+            { fontSize: 0.04 });
+        let numberInput = new NumberInput({
+            fontSize: 0.04,
+            height: 0.06,
+            width: 0.3,
+        }, ORBIT_DISABLING_STYLE);
+        numberInput.value = this.njs;
+        numberInput.minValue = 0.1;
+        numberInput.onBlur = () => {
+            setKeyboardLock(false);
+            this.njs = Number.parseFloat(numberInput.value);
+        };
+        numberInput.onFocus = () => { setKeyboardLock(true); };
+        numberRow.add(numberTitle);
+        numberRow.add(numberInput);
+        checkbox.onChange = (value) => {
+            this.njsOverrideEnabled = value;
+            if(value) {
+                this._njsPage.add(numberRow);
+            } else {
+                this._njsPage.remove(numberRow);
+            }
+        };
         this._njsPage.add(topRow);
+        this._njsPage.add(enabledRow);
     }
 }
 

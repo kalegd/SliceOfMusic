@@ -290,7 +290,9 @@ export default class SliceOfMusicSystem extends System {
 
     _setupCourse(trackDetails, info, mapDetails) {
         this._bpm = trackDetails.data.info.audio.bpm;
-        this._noteJumpSpeed = info.njs;
+        this._noteJumpSpeed = (ModifiersMenu.njsOverrideEnabled)
+            ? ModifiersMenu.njs
+            : info.njs;
         this._startBeatOffset = info.njsOffset;
         this._halfJumpDuration = this._calculateHalfJumpDistance(this._bpm,
             this._noteJumpSpeed, this._startBeatOffset);
