@@ -61,6 +61,7 @@ export default class SliceOfMusicSystem extends System {
         this._badHitAudioBeats = {};
         this._missAudioBeats = {};
         this._postSwingPendingCalculation = new Set();
+        this._liveSplitBoxes = new Set();
         ModifiersMenu.onColorChange = (side, color) => {
             this._setColor(side, color);
         };
@@ -138,6 +139,13 @@ export default class SliceOfMusicSystem extends System {
             this._setColor('left', ModifiersMenu.leftColor.getHex());
             this._setColor('right', ModifiersMenu.rightColor.getHex());
         }
+        this._splitBoxesPool = [];
+        for(let i = 0; i < 20; i++) {
+            let clonedMaterial = cubeMesh.material.clone();
+            clonedMaterial.clippingPlanes = [new THREE.Plane()];
+            let box = new THREE.Mesh(cubeMesh.geometry, clonedMaterial);
+            this._splitBoxesPool.push(box);
+        }
     }
 
     _setupBombs(instance) {
@@ -198,12 +206,14 @@ export default class SliceOfMusicSystem extends System {
         this._rightSaber.tip = new THREE.Object3D();
         this._rightSaber.tip.position.set(0, 1, 0);
         this._rightSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
+        this._rightSaber.tip.worldPosition = new THREE.Vector3(0, 10, 0);
         this._rightSaber.tip.direction = new THREE.Vector3();
         this._rightSaber.object.add(this._rightSaber.tip);
         this._leftSaber.rotations = [];
         this._leftSaber.tip = new THREE.Object3D();
         this._leftSaber.tip.position.set(0, 1, 0);
         this._leftSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
+        this._leftSaber.tip.worldPosition = new THREE.Vector3(0, 10, 0);
         this._leftSaber.tip.direction = new THREE.Vector3();
         this._leftSaber.object.add(this._leftSaber.tip);
         if(this._course) {
@@ -240,7 +250,7 @@ export default class SliceOfMusicSystem extends System {
         this._badHitAudio = await this._setupAudio(
             '/assets/audio/BadHitSound.ogg');
         this._gainNode = this._audioContext.createGain();
-        this._gainNode.gain.value = 0.2;
+        this._gainNode.gain.value = 0.4;
         this._gainNode.connect(this._audioContext.destination);
         this._lowpassFilter = this._audioContext.createBiquadFilter();
         this._lowpassFilter.type = 'lowpass';
@@ -339,6 +349,7 @@ export default class SliceOfMusicSystem extends System {
         this._obstacles.counter = 0;
         this._health = 0.5;
         this._score = 0;
+        this._splitBoxesPoolIndex = 0;
         this._multiplier = 1;
         this._hitsToNextMultiplier = 2;
         this._hitAudioBeats = {};
@@ -458,8 +469,8 @@ export default class SliceOfMusicSystem extends System {
             saber.rotations.push(saber.object.quaternion.toArray());
         saber.object.updateMatrixWorld(true);
         saber.tip.getWorldPosition(workingVector3);
-        saber.tip.direction.subVectors(workingVector3, saber.tip.lastPosition);
-        saber.tip.lastPosition.copy(workingVector3);
+        saber.tip.direction.subVectors(workingVector3, saber.tip.worldPosition);
+        saber.tip.worldPosition.copy(workingVector3);
     }
 
     _checkCollisions(timeDelta) {
@@ -553,7 +564,7 @@ export default class SliceOfMusicSystem extends System {
         saber.object.getWorldPosition(workingVector3);
         raycaster.ray.origin.copy(workingVector3);
         raycaster.ray.direction.copy(
-            workingVector3.sub(saber.tip.lastPosition).negate());
+            workingVector3.sub(saber.tip.worldPosition).negate());
         let intersections = raycaster.intersectObject(hitObject);
         if(intersections.length == 0) return false;
         let point = hitObject.worldToLocal(intersections[0].point);
@@ -566,7 +577,7 @@ export default class SliceOfMusicSystem extends System {
             workingVector3.add(hitObject.position);
             hitObject.worldToLocal(workingVector3);
             let hitCenter = this._checkHitsCenter(saber, hitObject, point);
-            this._hitBlock(details, saber, hitCenter);
+            this._hitBlock(details, saber, hitCenter, hitObject);
         } else {
             //Check direction
             workingVector3.copy(saber.tip.direction);
@@ -575,7 +586,7 @@ export default class SliceOfMusicSystem extends System {
             if(workingVector3.y < 0) {
                 let hitCenter = this._checkHitsCenter(saber, hitObject, point,
                     workingVector3);
-                this._hitBlock(details, saber, hitCenter);
+                this._hitBlock(details, saber, hitCenter, hitObject);
             } else {
                 this._smallHitBox.position.copy(this._hitBox.position);
                 this._smallHitBox.rotation.copy(this._hitBox.rotation);
@@ -660,7 +671,7 @@ export default class SliceOfMusicSystem extends System {
         if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
     }
 
-    _hitBlock(details, saber, hitCenter) {
+    _hitBlock(details, saber, hitCenter, hitObject) {
         details.passed = true;
         workingMatrix.makeTranslation(0, -1000, 0);
         details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
@@ -707,9 +718,45 @@ export default class SliceOfMusicSystem extends System {
             postSwingAngle: 0,
             multiplier: this._multiplier,
         });
+        this._splitBoxFor(hitObject, saber, details.side);
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
             hapticActuators[0].pulse(.25, 100);
+    }
+
+    _splitBoxFor(hitObject, saber, side) {
+        let color = ModifiersMenu[side + 'Color'];
+        let splitBox1 = this._getNextSplitBoxFromPool();
+        let splitBox2 = this._getNextSplitBoxFromPool();
+        let clippingPlane = splitBox1.material.clippingPlanes[0];
+        saber.object.getWorldPosition(workingVector3);
+        saber.tip.getWorldPosition(workingVector3b);
+        if(workingVector3b.equals(saber.tip.lastPosition)) {
+            //If for some reason it's in the same position, offset vertically
+            workingVector3b.y -= 0.01;
+        }
+        clippingPlane.setFromCoplanarPoints(workingVector3, workingVector3b,
+            saber.tip.lastPosition).normalize();
+        splitBox2.material.clippingPlanes[0].copy(clippingPlane).negate();
+        splitBox1.position.copy(hitObject.position);
+        splitBox2.position.copy(hitObject.position);
+        splitBox1.rotation.copy(hitObject.rotation);
+        splitBox2.rotation.copy(hitObject.rotation);
+        splitBox1.timeToDeletion = this._noteJumpSpeed * 2;
+        splitBox2.timeToDeletion = this._noteJumpSpeed * 2;
+        splitBox1.material.color.copy(color);
+        splitBox2.material.color.copy(color);
+        Scene.object.add(splitBox1);
+        Scene.object.add(splitBox2);
+        this._liveSplitBoxes.add(splitBox1);
+        this._liveSplitBoxes.add(splitBox2);
+    }
+
+    _getNextSplitBoxFromPool() {
+        let box = this._splitBoxesPool[this._splitBoxesPoolIndex];
+        this._splitBoxesPoolIndex += 1
+        this._splitBoxesPoolIndex %= this._splitBoxesPool.length;
+        return box;
     }
 
     _decreaseMultiplier() {
@@ -719,6 +766,24 @@ export default class SliceOfMusicSystem extends System {
                 this._multiplier);
         }
         this._hitsToNextMultiplier = this._multiplier * 2;
+    }
+
+    _updateSplitBoxes(timeDelta) {
+        let separationSpeed = 4 * timeDelta;
+        for(let splitBox of this._liveSplitBoxes) {
+            splitBox.timeToDeletion -= timeDelta;
+            if(splitBox.timeToDeletion <= 0) {
+                this._liveSplitBoxes.delete(splitBox);
+                Scene.object.remove(splitBox);
+                continue;
+            }
+            let clippingPlane = splitBox.material.clippingPlanes[0];
+            workingVector3.copy(clippingPlane.normal)
+                .multiplyScalar(separationSpeed);
+            workingVector3.z += this._noteJumpSpeed * timeDelta / 4;
+            clippingPlane.translate(workingVector3);
+            splitBox.position.add(workingVector3);
+        }
     }
 
     _updateNotes(maxBeat) {
@@ -906,9 +971,15 @@ export default class SliceOfMusicSystem extends System {
             this._bpm = bpmEvent.bpm;
             this._bpmEventsIndex++;
         }
+        this._updateSplitBoxes(timeDelta);
         this._currentBeat = currentBeat;
         this._updatePositions();
         this._checkCollisions(timeDelta);
+        if(deviceType == 'XR') {
+            for(let saber of [this._leftSaber, this._rightSaber]) {
+                if(saber) saber.tip.lastPosition.copy(saber.tip.worldPosition);
+            }
+        }
     }
 
     static assetId = '98f2445f-df75-4ec6-82a0-7bb2cd23eb1c';
