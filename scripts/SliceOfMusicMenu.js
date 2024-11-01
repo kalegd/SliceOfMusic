@@ -39,13 +39,15 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
         this._acknowledgementPage = new DigitalBaconUI.Div(PAGE_STYLE);
         if(deviceType != 'XR') {
             let text = new DigitalBaconUI.Text('You must use an AR or VR device to actually hit boxes in this game', TEXT_STYLE,
-                { marginTop: 0.05, maxWidth: 0.8, marginRight: 0.03 });
+                { marginTop: 0.045, marginRight: 0.03, maxWidth: 0.8 });
             this._acknowledgementPage.add(text);
         }
-        let text = new DigitalBaconUI.Text('This game utilizes content from BeatSaver. Please note that all songs, maps, and related assets are the property of their respective owners. I do not claim ownership of any music or data presented in the game', TEXT_STYLE, { marginTop: 0.05, maxWidth: 0.8 });
-        let text2 = new DigitalBaconUI.Text('This game was inspired by Moon Rider, which was inspired by Beat Saber, which was likely inspired by Beat Ninja. Anyways, this game does not use any of the same code or assets as those. If you feel that the bevelled boxes are too similarly bevelled to your game, or that the circles are too similarly... circular... please open an issue about that on the GitHub repo...', TEXT_STYLE, { marginTop: 0.05, maxWidth: 0.8 });
+        let text = new DigitalBaconUI.Text('This game utilizes content from BeatSaver. Please note that all songs, maps, and related assets are the property of their respective owners. I do not claim ownership of any music or data presented in the game', TEXT_STYLE, { marginTop: 0.045, maxWidth: 0.8 });
+        let text2 = new DigitalBaconUI.Text('This game was inspired by Moon Rider, which was inspired by Beat Saber, which was likely inspired by Beat Ninja. Anyways, this game does not use any of the same code or assets as those. If you feel that the bevelled boxes are too similarly bevelled to your game, or that the circles are too similarly... circular... please open an issue about that on the GitHub repo...', TEXT_STYLE, { marginTop: 0.045, maxWidth: 0.8 });
+        let text3 = new DigitalBaconUI.Text('Special thanks to Kival Evan and his open source bsmap repo', TEXT_STYLE,
+            { marginTop: 0.045, marginRight: 0.09, maxWidth: 0.8 });
         let button = new DigitalBaconUI.Div(ORBIT_DISABLING_STYLE,
-            BIG_BUTTON_STYLE, { marginTop: 0.05 });
+            BIG_BUTTON_STYLE, { marginTop: 0.045 });
         let buttonText = new DigitalBaconUI.Text('Acknowledge', TEXT_STYLE, { fontSize: 0.04 });
         button.add(buttonText);
         button.pointerInteractable.addHoveredCallback((hovered) => {
@@ -57,6 +59,7 @@ class _SliceOfMusicMenu extends DigitalBaconUI.Body {
         }
         this._acknowledgementPage.add(text);
         this._acknowledgementPage.add(text2);
+        this._acknowledgementPage.add(text3);
         this._acknowledgementPage.add(button);
     }
 
