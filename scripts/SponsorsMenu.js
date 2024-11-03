@@ -1,4 +1,4 @@
-const { DigitalBaconUI } = window.DigitalBacon;
+const { DigitalBaconUI, getDeviceType } = window.DigitalBacon;
 
 const { BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE } = await import(location.origin + '/scripts/constants.js');
 
@@ -61,5 +61,6 @@ export default class SponsorsMenu extends DigitalBaconUI.Body {
         this.add(digitalBaconLink);
         this.add(vcs);
         this.add(contactLink);
+        if(getDeviceType() == 'XR') this.onClick = () => {};
     }
 }

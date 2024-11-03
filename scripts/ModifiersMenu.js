@@ -1,4 +1,4 @@
-const { DigitalBaconUI, THREE, setKeyboardLock } = window.DigitalBacon;
+const { DigitalBaconUI, THREE, getDeviceType, setKeyboardLock } = window.DigitalBacon;
 const { Body, Checkbox, Div, HSLColor, NumberInput, Span, Style, Text } = DigitalBaconUI;
 
 const { BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE } = await import(location.origin + '/scripts/constants.js');
@@ -33,6 +33,7 @@ class ModifiersMenu extends Body {
         this._createOptionsPage();
         this._createColorsPage();
         this._createNJSPage();
+        if(getDeviceType() == 'XR') this.onClick = () => {};
     }
 
     _createOptionsPage() {
@@ -61,6 +62,11 @@ class ModifiersMenu extends Body {
         this._optionsPage.add(neverFailButton);
         this._optionsPage.add(njsButton);
         this.add(this._optionsPage);
+        if(getDeviceType() != 'XR') {
+            this.neverFail = true;
+            neverFailButton.addStyle(selectedButtonStyle);
+            neverFailButton.textComponent.color = 0x00ff00;
+        }
     }
 
     _createOption(label, onClick) {
@@ -164,7 +170,8 @@ class ModifiersMenu extends Body {
             setKeyboardLock(false);
             this.njs = Number.parseFloat(numberInput.value);
         };
-        numberInput.onFocus = () => { setKeyboardLock(true); };
+        numberInput.onEnter = () => numberInput.blur();
+        numberInput.onFocus = () => setKeyboardLock(true);
         numberRow.add(numberTitle);
         numberRow.add(numberInput);
         checkbox.onChange = (value) => {

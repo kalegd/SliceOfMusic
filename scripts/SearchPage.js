@@ -45,7 +45,7 @@ export default class SearchPage extends DigitalBaconUI.Div {
         let url = API_URL + '/search/text/0?leaderboard=All&noodle=false&';
         url += (text)
             ? 'sortOrder=Relevance&q=' + encodeURIComponent(text)
-            : 'sortOrder=Latest';
+            : 'sortOrder=Curated';
         fetch(url, {
             method: "GET",
         }).then((result) => result.json()).then((response) => {
