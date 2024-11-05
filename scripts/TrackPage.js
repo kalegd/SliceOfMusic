@@ -8,6 +8,8 @@ const { DigitalBaconUI, OrbitDisablingPointerInteractable, PubSub } = window.Dig
 const { BIG_BUTTON_STYLE, BIG_TEXT_STYLE, ORBIT_DISABLING_STYLE, TEXT_STYLE, ZIP_CACHE } = await import(location.origin + '/scripts/constants.js');
 const { createBackButton } = await import(location.origin + '/scripts/utils.js');
 
+const greenText = new DigitalBaconUI.Style({ color: 0x00ff00 });
+
 export default class TrackPage extends DigitalBaconUI.Div {
     constructor(backHandler, ...styles) {
         super(...styles);
@@ -47,18 +49,25 @@ export default class TrackPage extends DigitalBaconUI.Div {
         this._title.text = track.name;
         this._data = ZIP_CACHE[track.id];
         for(let key in this._data.difficulties) {
-            let radio = new DigitalBaconUI.Radio('difficulty', {
-                height: 0.04,
-                margin: 0.005,
-                width: 0.04,
+            let span = new DigitalBaconUI.Span({
+                backgroundVisible: true,
+                materialColor: 0x000000,
+                padding: 0.02,
+                width: '100%',
             }, ORBIT_DISABLING_STYLE);
-            let radioSpan = new DigitalBaconUI.Span();
-            let radioLabel = new DigitalBaconUI.Text(key, TEXT_STYLE);
-            radioSpan.add(radio);
-            radioSpan.add(radioLabel);
-            this._difficultyDiv.add(radioSpan);
-            this._difficulties.push(radioSpan);
-            radio.onSelect = () => {
+            let label = new DigitalBaconUI.Text(key, TEXT_STYLE);
+            span.add(label);
+            span.textComponent = label;
+            this._difficultyDiv.add(span);
+            this._difficulties.push(span);
+            span.pointerInteractable.addHoveredCallback((hovered) => {
+                span.materialColor = (hovered) ? 0x222222 : 0x000000;
+            });
+            span.onClick = () => {
+                for(let difficulty of this._difficulties) {
+                    difficulty.textComponent.removeStyle(greenText);
+                }
+                label.addStyle(greenText);
                 this._chosenDifficulty = key;
                 this._startButton.pointerInteractable.disabled = false;
             };
@@ -66,14 +75,14 @@ export default class TrackPage extends DigitalBaconUI.Div {
     }
 
     _clear() {
-        for(let radioSpan of this._difficulties) {
-            this._difficultyDiv.remove(radioSpan);
+        for(let span of this._difficulties) {
+            this._difficultyDiv.remove(span);
         }
         this._difficulties = [];
     }
 
     start() {
-        console.log("Start game");
+        //console.log("Start game");
         PubSub.publish('SLICE_OF_MUSIC_TRACK_PAGE', 'SLICE_OF_MUSIC:START', {
             data: this._data,
             difficulty: this._chosenDifficulty,

@@ -18,6 +18,8 @@ const AUDIO_QUANTITY = 10;
 const COMPONENT_ASSET_ID = 'b40ad677-1ec9-4ac0-9af6-8153a8b9f1e0';
 const HJD_START = 4;
 const HJD_MIN = .25;
+const workingBox3 = new THREE.Box3();
+const workingPlane = new THREE.Plane();
 const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
 const workingVector3b = new THREE.Vector3();
@@ -232,6 +234,8 @@ export default class SliceOfMusicSystem extends System {
         geometry.translate(0, 0, 0.25);
         this._hitBox = new THREE.Mesh(geometry, material);
         geometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        geometry.computeBoundingBox();
+        workingBox3.copy(geometry.boundingBox);
         this._smallHitBox = new THREE.Mesh(geometry, material);
         geometry = new THREE.SphereGeometry(0.2);
         this._hitSphere = new THREE.Mesh(geometry, material);
@@ -303,7 +307,7 @@ export default class SliceOfMusicSystem extends System {
         this._setupCourse(trackDetails, info, mapDetails);
         Scene.object.add(this._course);
         //console.log(info);
-        console.log(mapDetails);
+        //console.log(mapDetails);
     }
 
     _setupCourse(trackDetails, info, mapDetails) {
@@ -510,8 +514,8 @@ export default class SliceOfMusicSystem extends System {
 
         let inObstacle = false;
         for(let i = 0; i < this._liveObstacles.length; i++) {
-            let details = this._liveObstacles[0];
-            let z = this._getZ(details);
+            let details = this._liveObstacles[i];
+            let z = this._getZ(details, true);
             if(z < -2) break;
             if(details.passed) continue;
             if(this._checkHeadCollision(details, timeDelta)) {
@@ -545,9 +549,9 @@ export default class SliceOfMusicSystem extends System {
         workingVector3b.setFromMatrixPosition(workingMatrix);
         workingVector3b.add(this._course.position);
         workingVector3.sub(workingVector3b);
-        return (Math.abs(workingVector3.x) < details.width &&
-                Math.abs(workingVector3.y) < details.height &&
-                Math.abs(workingVector3.z) < details.depth);
+        return (Math.abs(workingVector3.x) < details.width / 2 &&
+                Math.abs(workingVector3.y) < details.height / 2 &&
+                Math.abs(workingVector3.z) < details.depth / 2);
     }
 
     _checkSaberCollision(side, details) {
@@ -557,6 +561,7 @@ export default class SliceOfMusicSystem extends System {
             ? this._hitSphere
             : (details.side != side) ? this._smallHitBox : this._hitBox;
         details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
+        workingBox3.applyMatrix4(workingMatrix);
         workingVector3.setFromMatrixPosition(workingMatrix);
         workingVector3.add(this._course.position);
         hitObject.position.copy(workingVector3);
@@ -610,12 +615,15 @@ export default class SliceOfMusicSystem extends System {
         return Math.abs(midX) < 0.25;
     }
 
-    _getZ(details) {
+    _getZ(details, useBackOfDepth) {
         details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
         workingVector3.setFromMatrixPosition(workingMatrix);
         workingVector3.add(this._course.position);
         let z = workingVector3.z;
-        if(details.depth) z -= details.depth / 2;
+        if(details.depth) {
+            if(useBackOfDepth) z += details.depth / 2;
+            else z -= details.depth / 2;
+        }
         return z;
     }
 
@@ -650,7 +658,7 @@ export default class SliceOfMusicSystem extends System {
         this._decreaseMultiplier();
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
-            hapticActuators[0].pulse(.75, 100);
+            hapticActuators[0].pulse(1, 250);
     }
 
     _badHit(details, saber) {
@@ -667,7 +675,7 @@ export default class SliceOfMusicSystem extends System {
         this._decreaseMultiplier();
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
-            hapticActuators[0].pulse(.25, 100);
+            hapticActuators[0].pulse(0.75, 250);
         if(this._health == 0 && !ModifiersMenu.neverFail) this._lose();
     }
 
@@ -721,7 +729,7 @@ export default class SliceOfMusicSystem extends System {
         this._splitBoxFor(hitObject, saber, details.side);
         let hapticActuators = saber.hapticActuators;
         if(hapticActuators && hapticActuators.length > 0)
-            hapticActuators[0].pulse(.25, 100);
+            hapticActuators[0].pulse(1, 250);
     }
 
     _splitBoxFor(hitObject, saber, side) {
@@ -769,7 +777,7 @@ export default class SliceOfMusicSystem extends System {
     }
 
     _updateSplitBoxes(timeDelta) {
-        let separationSpeed = 4 * timeDelta;
+        let separationSpeed = 5 * timeDelta;
         for(let splitBox of this._liveSplitBoxes) {
             splitBox.timeToDeletion -= timeDelta;
             if(splitBox.timeToDeletion <= 0) {

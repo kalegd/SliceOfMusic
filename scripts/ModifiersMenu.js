@@ -1,4 +1,4 @@
-const { DigitalBaconUI, THREE, getDeviceType, setKeyboardLock } = window.DigitalBacon;
+const { DigitalBaconUI, ProjectHandler, Scene, THREE, getDeviceType, setKeyboardLock } = window.DigitalBacon;
 const { Body, Checkbox, Div, HSLColor, NumberInput, Span, Style, Text } = DigitalBaconUI;
 
 const { BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE } = await import(location.origin + '/scripts/constants.js');
@@ -21,6 +21,8 @@ const selectedMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
 const hoveredButtonStyle = new Style({ borderMaterial: hoveredMaterial });
 const selectedButtonStyle = new Style({ borderMaterial: selectedMaterial });
 const HSL = {};
+const WATER_ASSET_ID = 'e55d3351-865a-4187-84bb-a6df1d62da2b';
+var simpleWater;
 
 class ModifiersMenu extends Body {
     constructor(params = {}) {
@@ -28,6 +30,7 @@ class ModifiersMenu extends Body {
         this.njs = 16;
         this.njsOverrideEnabled = false;
         this.neverFail = false;
+        this._useWaterShader = true;
         this.leftColor = new THREE.Color(0xff00ff);
         this.rightColor = new THREE.Color(0x00ffff);
         this._createOptionsPage();
@@ -57,10 +60,22 @@ class ModifiersMenu extends Body {
             this.remove(this._optionsPage);
             this.add(this._njsPage);
         });
+        let potatoButton = this._createOption('Water Shader', () => {
+            this._toggleWaterShader();
+            if(this._useWaterShader) {
+                potatoButton.addStyle(selectedButtonStyle);
+                potatoButton.textComponent.color = 0x00ff00;
+            } else {
+                potatoButton.removeStyle(selectedButtonStyle);
+                potatoButton.textComponent.color = 0xffffff;
+            }
+        });
+        this._toggleWaterShader();
         this._optionsPage.add(title);
         this._optionsPage.add(colorsButton);
         this._optionsPage.add(neverFailButton);
         this._optionsPage.add(njsButton);
+        this._optionsPage.add(potatoButton);
         this.add(this._optionsPage);
         if(getDeviceType() != 'XR') {
             this.neverFail = true;
@@ -184,6 +199,30 @@ class ModifiersMenu extends Body {
         };
         this._njsPage.add(topRow);
         this._njsPage.add(enabledRow);
+    }
+
+    _toggleWaterShader() {
+        this._useWaterShader = !this._useWaterShader;
+        let water = ProjectHandler.getAsset(WATER_ASSET_ID);
+        if(this._useWaterShader) {
+            if(simpleWater) simpleWater.visible = false;
+            water.object.visible = true;
+        } else {
+            water.object.visible = false;
+            if(!simpleWater) {
+                let geometry = water._mesh.geometry.clone();
+                let material = new THREE.MeshStandardMaterial({
+                    color: 0x00ffff,
+                    opacity: 0.8,
+                    transparent: true,
+                });
+                simpleWater = new THREE.Mesh(geometry, material);
+                simpleWater.position.copy(water.object.position);
+                simpleWater.rotation.copy(water.object.rotation);
+                Scene.object.add(simpleWater);
+            }
+            simpleWater.visible = true;
+        }
     }
 }
 

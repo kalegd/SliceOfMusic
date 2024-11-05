@@ -19,6 +19,7 @@ const { CustomAssetEntity } = Assets;
 const deviceType = getDeviceType();
 const DECODER = new window["ogg-vorbis-decoder"].OggVorbisDecoderWebWorker({ forceStereo: true });
 const logoImagePath = '/assets/images/slice_of_music.jpg';
+DigitalBaconUI.Keyboard.scale.set(1, 1, 1);
 
 class _SliceOfMusicMenu extends DigitalBaconUI.Body {
     constructor() {
