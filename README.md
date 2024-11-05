@@ -1,4 +1,4 @@
-# Slice Of Music
+# Slice of Music
 ### [Show your Appreciation](https://github.com/sponsors/kalegd) &nbsp;|	&nbsp;[3D Website Building Tool](https://github.com/kalegd/DigitalBacon) &nbsp;|	&nbsp;[Play Now](https://sliceofmusic.com)
 Slice blocks to the beat of music
 
