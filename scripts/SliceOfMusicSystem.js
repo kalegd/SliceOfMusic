@@ -561,7 +561,6 @@ export default class SliceOfMusicSystem extends System {
             ? this._hitSphere
             : (details.side != side) ? this._smallHitBox : this._hitBox;
         details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
-        workingBox3.applyMatrix4(workingMatrix);
         workingVector3.setFromMatrixPosition(workingMatrix);
         workingVector3.add(this._course.position);
         hitObject.position.copy(workingVector3);
@@ -578,41 +577,42 @@ export default class SliceOfMusicSystem extends System {
         } else if(details.side != side) {
             this._badHit(details, saber);
         } else if(details.isAnyDirection) {
-            workingVector3.copy(saber.tip.direction);
-            workingVector3.add(hitObject.position);
-            hitObject.worldToLocal(workingVector3);
-            let hitCenter = this._checkHitsCenter(saber, hitObject, point);
+            let hitCenter = this._checkHitsCenter(saber, hitObject);
             this._hitBlock(details, saber, hitCenter, hitObject);
         } else {
+            let hitCenter = this._checkHitsCenter(saber, hitObject);
             //Check direction
             workingVector3.copy(saber.tip.direction);
             workingVector3.add(hitObject.position);
             hitObject.worldToLocal(workingVector3);
             if(workingVector3.y < 0) {
-                let hitCenter = this._checkHitsCenter(saber, hitObject, point,
-                    workingVector3);
                 this._hitBlock(details, saber, hitCenter, hitObject);
+            } else if(!hitCenter) {
+                return false;
             } else {
-                this._smallHitBox.position.copy(this._hitBox.position);
-                this._smallHitBox.rotation.copy(this._hitBox.rotation);
-                intersections = raycaster.intersectObject(this._smallHitBox);
-                if(intersections.length == 0) return false;
                 this._badHit(details, saber);
             }
         }
         return true;
     }
 
-    _checkHitsCenter(saber, hitObject, point, direction) {
-        if(direction != workingVector3) {
-            workingVector3.copy(saber.tip.direction);
-            workingVector3.add(hitObject.position);
-            hitObject.worldToLocal(workingVector3);
+    _checkHitsCenter(saber, hitObject) {
+        hitObject.updateMatrixWorld(true);
+        workingBox3.copy(this._smallHitBox.geometry.boundingBox)
+            .applyMatrix4(hitObject.matrixWorld);
+        this._setPlaneToSlice(saber, workingPlane);
+        return workingPlane.intersectsBox(workingBox3);
+    }
+
+    _setPlaneToSlice(saber, plane) {
+        saber.object.getWorldPosition(workingVector3);
+        saber.tip.getWorldPosition(workingVector3b);
+        if(workingVector3b.equals(saber.tip.lastPosition)) {
+            //If for some reason it's in the same position, offset vertically
+            workingVector3b.y -= 0.01;
         }
-        hitObject.worldToLocal(point);
-        let multiplier = -1 * point.y / workingVector3.y;
-        let midX = point.x + workingVector3.x * multiplier;
-        return Math.abs(midX) < 0.25;
+        plane.setFromCoplanarPoints(workingVector3, workingVector3b,
+            saber.tip.lastPosition).normalize();
     }
 
     _getZ(details, useBackOfDepth) {
@@ -713,7 +713,7 @@ export default class SliceOfMusicSystem extends System {
             workingQuaternion2.fromArray(saber.rotations[i]);
             let angle = workingQuaternion.angleTo(workingQuaternion2);
             if(angle < 0) console.log("Fuck");
-            if(angle <= preSwingAngle) break;
+            if(angle < preSwingAngle) break;
             preSwingAngle = angle;
         }
         preSwingAngle *= 180 / Math.PI;
@@ -737,14 +737,7 @@ export default class SliceOfMusicSystem extends System {
         let splitBox1 = this._getNextSplitBoxFromPool();
         let splitBox2 = this._getNextSplitBoxFromPool();
         let clippingPlane = splitBox1.material.clippingPlanes[0];
-        saber.object.getWorldPosition(workingVector3);
-        saber.tip.getWorldPosition(workingVector3b);
-        if(workingVector3b.equals(saber.tip.lastPosition)) {
-            //If for some reason it's in the same position, offset vertically
-            workingVector3b.y -= 0.01;
-        }
-        clippingPlane.setFromCoplanarPoints(workingVector3, workingVector3b,
-            saber.tip.lastPosition).normalize();
+        this._setPlaneToSlice(saber, clippingPlane);
         splitBox2.material.clippingPlanes[0].copy(clippingPlane).negate();
         splitBox1.position.copy(hitObject.position);
         splitBox2.position.copy(hitObject.position);
@@ -928,7 +921,7 @@ export default class SliceOfMusicSystem extends System {
             workingQuaternion2.fromArray(
                 details.saber.rotations[details.rotationsIndex++]);
             let angle = workingQuaternion.angleTo(workingQuaternion2);
-            if(details.postSwingAngle < angle) {
+            if(details.postSwingAngle <= angle) {
                 details.postSwingAngle = angle;
             } else {
                 details.postSwingAngle *= 180 / Math.PI;
@@ -967,6 +960,7 @@ export default class SliceOfMusicSystem extends System {
             timeDelta = 0;
         }
         this._course.position.z += this._noteJumpSpeed * timeDelta;
+        this._course.updateWorldMatrix();
         let currentBeat = this._currentBeat + timeDelta * this._bpm / 60;
         while(this._bpmEventsIndex < this._bpmEvents.length) {
             let bpmEvent = this._bpmEvents[this._bpmEventsIndex];
