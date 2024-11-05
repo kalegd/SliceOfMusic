@@ -1,4 +1,4 @@
-const { DigitalBaconUI, getDeviceType } = window.DigitalBacon;
+const { DigitalBaconUI, getDeviceType, getRenderer } = window.DigitalBacon;
 
 const { BIG_TEXT_STYLE, BODY_STYLE, ORBIT_DISABLING_STYLE, PAGE_STYLE, TEXT_STYLE } = await import(location.origin + '/scripts/constants.js');
 
@@ -32,10 +32,15 @@ export default class SponsorsMenu extends DigitalBaconUI.Body {
         digitalBaconLink.add(
             new DigitalBaconUI.Text(digitalBaconUrl, TEXT_STYLE));
         digitalBaconLink.onClick = () => {
-            DigitalBaconUI.DelayedClickHandler.trigger(() => {
-                let newTab = window.open(digitalBaconUrl, '_blank');
-                if(newTab) newTab.focus();
-            });
+            if(getDeviceType() == 'XR') {
+                getRenderer().xr.getSession().end();
+                location.href = digitalBaconUrl;
+            } else {
+                DigitalBaconUI.DelayedClickHandler.trigger(() => {
+                    let newTab = window.open(digitalBaconUrl, '_blank');
+                    if(newTab) newTab.focus();
+                });
+            }
         };
         let vcs = new DigitalBaconUI.Text(vcText, TEXT_STYLE,
             { marginTop: 0.05, maxWidth: '91%' });
@@ -43,10 +48,15 @@ export default class SponsorsMenu extends DigitalBaconUI.Body {
         contactLink.add(
             new DigitalBaconUI.Text('Schedule Interview', TEXT_STYLE));
         contactLink.onClick = () => {
-            DigitalBaconUI.DelayedClickHandler.trigger(() => {
-                let newTab = window.open(calendlyUrl, '_blank');
-                if(newTab) newTab.focus();
-            });
+            if(getDeviceType() == 'XR') {
+                getRenderer().xr.getSession().end();
+                location.href = calendlyUrl;
+            } else {
+                DigitalBaconUI.DelayedClickHandler.trigger(() => {
+                    let newTab = window.open(calendlyUrl, '_blank');
+                    if(newTab) newTab.focus();
+                });
+            }
         };
         digitalBaconLink.pointerInteractable.addHoveredCallback((hovered) => {
             digitalBaconLink.materialColor = (hovered) ? 0x00a19f : 0x00cac7;
