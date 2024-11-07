@@ -23,8 +23,6 @@ const workingPlane = new THREE.Plane();
 const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
 const workingVector3b = new THREE.Vector3();
-const workingQuaternion = new THREE.Quaternion();
-const workingQuaternion2 = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster(undefined, undefined, 0, 1);
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
@@ -204,14 +202,14 @@ export default class SliceOfMusicSystem extends System {
         this._leftSaber.object.traverse((node) => {
             node.renderOrder = 5;
         });
-        this._rightSaber.rotations = [];
+        this._rightSaber.directions = [];
         this._rightSaber.tip = new THREE.Object3D();
         this._rightSaber.tip.position.set(0, 1, 0);
         this._rightSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
         this._rightSaber.tip.worldPosition = new THREE.Vector3(0, 10, 0);
         this._rightSaber.tip.direction = new THREE.Vector3();
         this._rightSaber.object.add(this._rightSaber.tip);
-        this._leftSaber.rotations = [];
+        this._leftSaber.directions = [];
         this._leftSaber.tip = new THREE.Object3D();
         this._leftSaber.tip.position.set(0, 1, 0);
         this._leftSaber.tip.lastPosition = new THREE.Vector3(0, 10, 0);
@@ -374,13 +372,14 @@ export default class SliceOfMusicSystem extends System {
         let maxScore = 0;
         let multiplier = 1;
         while(totalNotes) {
-            let subtractedNotes = (multiplier == 8)
+            let subtractedNotes = (multiplier == 1) ? 1 : (multiplier == 8)
                 ? totalNotes
                 : Math.min(multiplier * 2, totalNotes);
-            maxScore += subtractedNotes * multiplier;
+            maxScore += 115 * subtractedNotes * multiplier;
             totalNotes -= subtractedNotes;
             multiplier *= 2;
         }
+        return maxScore;
     }
 
     //https://github.com/KivalEvan/BeatSaber-MappingUtility/blob/main/src/bsmap/beatmap/helpers/njs.ts#L64-L72
@@ -474,7 +473,8 @@ export default class SliceOfMusicSystem extends System {
             saber.object.rotateX(Math.PI / 2);
         }
         if(this._rotationReads % 3 == 0)
-            saber.rotations.push(saber.object.quaternion.toArray());
+            saber.directions.push(
+                saber.object.getWorldDirection(workingVector3).toArray());
         saber.object.updateMatrixWorld(true);
         saber.tip.getWorldPosition(workingVector3);
         saber.tip.direction.subVectors(workingVector3, saber.tip.worldPosition);
@@ -709,13 +709,13 @@ export default class SliceOfMusicSystem extends System {
                     this._multiplier);
             }
         }
-        let hitRotation = saber.object.quaternion.toArray();
-        workingQuaternion.fromArray(hitRotation);
-        let rotationsIndex = saber.rotations.length;
+        let hitDirection = saber.object.getWorldDirection(workingVector3)
+            .toArray();
+        let directionsIndex = saber.directions.length;
         let preSwingAngle = 0;
-        for(let i = rotationsIndex - 1; i >= 0; i--) {
-            workingQuaternion2.fromArray(saber.rotations[i]);
-            let angle = workingQuaternion.angleTo(workingQuaternion2);
+        for(let i = directionsIndex - 1; i >= 0; i--) {
+            workingVector3b.fromArray(saber.directions[i]);
+            let angle = workingVector3.angleTo(workingVector3b);
             if(angle < 0) console.log("Fuck");
             if(angle < preSwingAngle) break;
             preSwingAngle = angle;
@@ -725,8 +725,8 @@ export default class SliceOfMusicSystem extends System {
             saber: saber,
             preSwingAngle: preSwingAngle,
             hitCenter: hitCenter,
-            hitRotation: hitRotation,
-            rotationsIndex: rotationsIndex,
+            hitDirection: hitDirection,
+            directionsIndex: directionsIndex,
             postSwingAngle: 0,
             multiplier: this._multiplier,
         });
@@ -919,12 +919,12 @@ export default class SliceOfMusicSystem extends System {
 
     _checkPostSwingPendingCalculations() {
         for(let details of this._postSwingPendingCalculation) {
-            if(details.rotationsIndex >= details.saber.rotations.length)
+            if(details.directionsIndex >= details.saber.directions.length)
                 continue;
-            workingQuaternion.fromArray(details.hitRotation);
-            workingQuaternion2.fromArray(
-                details.saber.rotations[details.rotationsIndex++]);
-            let angle = workingQuaternion.angleTo(workingQuaternion2);
+            workingVector3.fromArray(details.hitDirection);
+            workingVector3b.fromArray(
+                details.saber.directions[details.directionsIndex++]);
+            let angle = workingVector3.angleTo(workingVector3b);
             if(details.postSwingAngle <= angle) {
                 details.postSwingAngle = angle;
             } else {
