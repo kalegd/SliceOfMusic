@@ -407,6 +407,10 @@ export default class SliceOfMusicSystem extends System {
     _onTrackFinished() {
         this._trackStarted = false;
         let rank = this._calculateRank();
+        for(let splitBox of this._liveSplitBoxes) {
+            Scene.object.remove(splitBox);
+        }
+        this._liveSplitBoxes = new Set();
         PubSub.publish(this._id, 'SLICE_OF_MUSIC:END', {
             score: this._score,
             rank: rank,
