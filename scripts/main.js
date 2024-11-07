@@ -60,6 +60,9 @@ function configureAssets() {
 
 export default function main() {
     loadAssets();
-    Scene.object.backgroundRotation.set(0, Math.PI, 0);
+    //Nebula focus
+    Scene.object.backgroundRotation.set(2.4, Math.PI, 0);
+    //Centered Moon
+    //Scene.object.backgroundRotation.set(2.4, -0.3, 0);
 
 }
