@@ -22,7 +22,6 @@ const hoveredButtonStyle = new Style({ borderMaterial: hoveredMaterial });
 const selectedButtonStyle = new Style({ borderMaterial: selectedMaterial });
 const HSL = {};
 const WATER_ASSET_ID = 'e55d3351-865a-4187-84bb-a6df1d62da2b';
-var simpleWater;
 
 class ModifiersMenu extends Body {
     constructor(params = {}) {
@@ -204,25 +203,7 @@ class ModifiersMenu extends Body {
     _toggleWaterShader() {
         this._useWaterShader = !this._useWaterShader;
         let water = ProjectHandler.getAsset(WATER_ASSET_ID);
-        if(this._useWaterShader) {
-            if(simpleWater) simpleWater.visible = false;
-            water.object.visible = true;
-        } else {
-            water.object.visible = false;
-            if(!simpleWater) {
-                let geometry = water._mesh.geometry.clone();
-                let material = new THREE.MeshStandardMaterial({
-                    color: 0x00ffff,
-                    opacity: 0.8,
-                    transparent: true,
-                });
-                simpleWater = new THREE.Mesh(geometry, material);
-                simpleWater.position.copy(water.object.position);
-                simpleWater.rotation.copy(water.object.rotation);
-                Scene.object.add(simpleWater);
-            }
-            simpleWater.visible = true;
-        }
+        water.object.visible = this._useWaterShader == true;
     }
 }
 
