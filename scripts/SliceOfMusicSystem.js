@@ -64,6 +64,7 @@ export default class SliceOfMusicSystem extends System {
         this._missAudioBeats = {};
         this._postSwingPendingCalculation = new Set();
         this._liveSplitBoxes = new Set();
+        this._risingBlocks = new Set();
         ModifiersMenu.onColorChange = (side, color) => {
             this._setColor(side, color);
         };
@@ -411,6 +412,7 @@ export default class SliceOfMusicSystem extends System {
             Scene.object.remove(splitBox);
         }
         this._liveSplitBoxes = new Set();
+        this._risingBlocks = new Set();
         PubSub.publish(this._id, 'SLICE_OF_MUSIC:END', {
             score: this._score,
             rank: rank,
@@ -634,7 +636,7 @@ export default class SliceOfMusicSystem extends System {
     _miss(details) {
         details.passed = true;
         if(details.isBomb) return;
-        if(!this._missAudioBeats[details.beat]) {
+        if(deviceType == 'XR' && !this._missAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._missAudio;
             source.connect(this._gainNode);
@@ -649,7 +651,7 @@ export default class SliceOfMusicSystem extends System {
 
     _hitBomb(details, saber) {
         details.passed = true;
-        if(!this._badHitAudioBeats[details.beat]) {
+        if(deviceType == 'XR' && !this._badHitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._badHitAudio;
             source.connect(this._gainNode);
@@ -667,7 +669,7 @@ export default class SliceOfMusicSystem extends System {
 
     _badHit(details, saber) {
         details.passed = true;
-        if(!this._badHitAudioBeats[details.beat]) {
+        if(deviceType == 'XR' && !this._badHitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._badHitAudio;
             source.connect(this._gainNode);
@@ -690,7 +692,7 @@ export default class SliceOfMusicSystem extends System {
         details.blocks.instanceMatrix.needsUpdate = true;
         details.symbols.setMatrixAt(details.symbolsIndex, workingMatrix);
         details.symbols.instanceMatrix.needsUpdate = true;
-        if(!this._hitAudioBeats[details.beat]) {
+        if(deviceType == 'XR' && !this._hitAudioBeats[details.beat]) {
             let source = this._audioContext.createBufferSource();
             source.buffer = this._hitAudio;
             source.connect(this._gainNode);
@@ -817,7 +819,7 @@ export default class SliceOfMusicSystem extends System {
                 symbols.setMatrixAt(symbolsIndex, workingMatrix);
                 symbols.instanceMatrix.needsUpdate = true;
                 this._colorNotesIndex++;
-                this._liveBlocks.push({
+                let details = {
                     blocks: blocks,
                     blocksIndex: blocksIndex,
                     symbols: symbols,
@@ -825,7 +827,11 @@ export default class SliceOfMusicSystem extends System {
                     isAnyDirection: note.direction == 8,
                     side: (note.color == 0) ? 'left' : 'right',
                     beat: note.time,
-                });
+                    yPos: note.posY * GRID_DIMENSION,
+                    zPos: distance,
+                };
+                this._liveBlocks.push(details);
+                this._risingBlocks.add(details);
             } else {
                 break;
             }
@@ -847,12 +853,16 @@ export default class SliceOfMusicSystem extends System {
                 this._bombs.setMatrixAt(blocksIndex, workingMatrix);
                 this._bombs.instanceMatrix.needsUpdate = true;
                 this._bombNotesIndex++;
-                this._liveBlocks.push({
+                let details = {
                     blocks: this._bombs,
                     blocksIndex: blocksIndex,
                     beat: note.time,
+                    yPos: note.posY * GRID_DIMENSION,
+                    zPos: distance,
                     isBomb: true,
-                });
+                };
+                this._liveBlocks.push(details);
+                this._risingBlocks.add(details);
             } else {
                 break;
             }
@@ -879,15 +889,48 @@ export default class SliceOfMusicSystem extends System {
                 this._obstacles.setMatrixAt(blocksIndex, workingMatrix);
                 this._obstacles.instanceMatrix.needsUpdate = true;
                 this._obstacleNotesIndex++;
-                this._liveObstacles.push({
+                let details = {
                     blocks: this._obstacles,
                     blocksIndex: blocksIndex,
+                    beat: note.time,
+                    yPos: note.posY * GRID_DIMENSION,
+                    zPos: distance,
                     depth: depth,
                     height: note.height * GRID_DIMENSION,
                     width: note.width * GRID_DIMENSION,
-                });
+                };
+                this._liveObstacles.push(details);
+                this._risingBlocks.add(details);
             } else {
                 break;
+            }
+        }
+    }
+
+    _updateRisingBlocks() {
+        for(let details of this._risingBlocks) {
+            let end = details.beat - this._halfJumpDuration;
+            let start = end - this._halfJumpDuration;
+            details.blocks.getMatrixAt(details.blocksIndex, workingMatrix);
+            workingVector3.setFromMatrixPosition(workingMatrix);
+            let position;
+            if(this._currentBeat > end) {
+                position = 1;
+                this._risingBlocks.delete(details);
+            } else if(this._currentBeat < start) {
+                position = 0;
+            } else {
+                position = (this._currentBeat - start) / (end - start);
+                position = 0.5 * (1 - Math.cos(position * Math.PI));
+            }
+            workingVector3.y = details.yPos - 10 + position * 10;
+            //workingVector3.z = details.zPos - 50 + position * 50;
+            workingMatrix.setPosition(workingVector3);
+            details.blocks.setMatrixAt(details.blocksIndex, workingMatrix);
+            details.blocks.instanceMatrix.needsUpdate = true;
+            if(details.symbols) {
+                details.symbols.setMatrixAt(details.symbolsIndex,workingMatrix);
+                details.symbols.instanceMatrix.needsUpdate = true;
             }
         }
     }
@@ -942,10 +985,11 @@ export default class SliceOfMusicSystem extends System {
     }
 
     _updatePositions() {
-        let maxBeat = this._currentBeat + this._halfJumpDuration;
+        let maxBeat = this._currentBeat + this._halfJumpDuration * 2;
         this._updateNotes(maxBeat);
         this._updateBombs(maxBeat);
         this._updateObstacles(maxBeat);
+        this._updateRisingBlocks();
     }
 
     update(timeDelta) {
