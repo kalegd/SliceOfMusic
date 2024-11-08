@@ -1,4 +1,4 @@
-import { LibraryHandler, ProjectHandler, Scene } from 'DigitalBacon';
+import { LibraryHandler, ProjectHandler, Scene, UserController } from 'DigitalBacon';
 
 let assets = {};
 let componentTypes = {
@@ -59,6 +59,7 @@ function configureAssets() {
 }
 
 export default function main() {
+    UserController.avatar.object.visible = false;
     loadAssets();
     //Nebula focus
     Scene.object.backgroundRotation.set(2.4, Math.PI, 0);
