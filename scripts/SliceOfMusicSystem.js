@@ -621,7 +621,7 @@ export default class SliceOfMusicSystem extends System {
 
     _setPlaneToSlice(saber, plane) {
         saber.object.getWorldPosition(workingVector3);
-        saber.tip.getWorldPosition(workingVector3b);
+        workingVector3b.copy(saber.tip.worldPosition);
         if(workingVector3b.equals(saber.tip.lastPosition)) {
             //If for some reason it's in the same position, offset vertically
             workingVector3b.y -= 0.01;
