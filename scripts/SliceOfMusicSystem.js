@@ -506,7 +506,7 @@ export default class SliceOfMusicSystem extends System {
         for(let i = this._collisionsIndex; i < this._liveBlocks.length; i++) {
             let details = this._liveBlocks[i];
             let z = this._getZ(details);
-            if(z < -2) break;
+            if(z < -4) break;
             if(details.passed) continue;
             if(z > 0.5) {
                 this._miss(details);
@@ -520,7 +520,7 @@ export default class SliceOfMusicSystem extends System {
         for(let i = 0; i < this._liveObstacles.length; i++) {
             let details = this._liveObstacles[i];
             let z = this._getZ(details, true);
-            if(z < -2) break;
+            if(z < -4) break;
             if(details.passed) continue;
             if(this._checkHeadCollision(details, timeDelta)) {
                 if(!this._obstaclesHit.has(details)) {
