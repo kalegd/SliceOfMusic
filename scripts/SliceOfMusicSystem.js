@@ -24,6 +24,7 @@ const workingMatrix = new THREE.Matrix4();
 const workingVector3 = new THREE.Vector3();
 const workingVector3b = new THREE.Vector3();
 const raycaster = new THREE.Raycaster(undefined, undefined, 0, 1);
+const arrowHelper = new THREE.ArrowHelper();
 const GRID_DIMENSION = 0.45;
 const directionRotations = [
     Math.PI,
@@ -52,6 +53,7 @@ export default class SliceOfMusicSystem extends System {
             MISSED_BLOCK_AUDIO: 0,
             SLICED_BOMB_AUDIO: 0,
         };
+        this._debug = false
         this._playerHeight = 1.7;
         this._setupHitBoxes();
         this._setupObstacles();
@@ -237,12 +239,17 @@ export default class SliceOfMusicSystem extends System {
         this._smallHitBox = new THREE.Mesh(geometry, material);
         geometry = new THREE.SphereGeometry(0.2);
         this._hitSphere = new THREE.Mesh(geometry, material);
-        this._hitBox.visible = false;
-        this._smallHitBox.visible = false;
-        this._hitSphere.visible = false;
         Scene.object.add(this._hitBox);
         Scene.object.add(this._smallHitBox);
         Scene.object.add(this._hitSphere);
+        console.log(this._debug);
+        if(this._debug) {
+            Scene.object.add(arrowHelper);
+        } else {
+            this._hitBox.visible = false;
+            this._smallHitBox.visible = false;
+            this._hitSphere.visible = false;
+        }
     }
 
     async _setupAudios(url) {
@@ -569,10 +576,15 @@ export default class SliceOfMusicSystem extends System {
         workingVector3.add(this._course.position);
         hitObject.position.copy(workingVector3);
         hitObject.rotation.setFromRotationMatrix(workingMatrix);
+        hitObject.updateWorldMatrix(false, false);
         saber.object.getWorldPosition(workingVector3);
         raycaster.ray.origin.copy(workingVector3);
         raycaster.ray.direction.copy(
-            workingVector3.sub(saber.tip.worldPosition).negate());
+            workingVector3.sub(saber.tip.worldPosition).negate()).normalize();
+        if(this._debug) {
+            arrowHelper.position.copy(raycaster.ray.origin);
+            arrowHelper.setDirection(raycaster.ray.direction);
+        }
         let intersections = raycaster.intersectObject(hitObject);
         if(intersections.length == 0) return false;
         let point = hitObject.worldToLocal(intersections[0].point);
@@ -601,7 +613,6 @@ export default class SliceOfMusicSystem extends System {
     }
 
     _checkHitsCenter(saber, hitObject) {
-        hitObject.updateMatrixWorld(true);
         workingBox3.copy(this._smallHitBox.geometry.boundingBox)
             .applyMatrix4(hitObject.matrixWorld);
         this._setPlaneToSlice(saber, workingPlane);
