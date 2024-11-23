@@ -242,7 +242,6 @@ export default class SliceOfMusicSystem extends System {
         Scene.object.add(this._hitBox);
         Scene.object.add(this._smallHitBox);
         Scene.object.add(this._hitSphere);
-        console.log(this._debug);
         if(this._debug) {
             Scene.object.add(arrowHelper);
         } else {
@@ -259,7 +258,7 @@ export default class SliceOfMusicSystem extends System {
         this._badHitAudio = await this._setupAudio(
             '/assets/audio/BadHitSound.ogg');
         this._gainNode = this._audioContext.createGain();
-        this._gainNode.gain.value = 0.4;
+        this._gainNode.gain.value = 0.2;
         this._gainNode.connect(this._audioContext.destination);
         this._lowpassFilter = this._audioContext.createBiquadFilter();
         this._lowpassFilter.type = 'lowpass';
@@ -313,6 +312,7 @@ export default class SliceOfMusicSystem extends System {
         Scene.object.add(this._course);
         //console.log(info);
         //console.log(mapDetails);
+        UserController.disableBasicMovement();
     }
 
     _setupCourse(trackDetails, info, mapDetails) {
@@ -423,6 +423,7 @@ export default class SliceOfMusicSystem extends System {
             notesHit: this._colorNotesHit,
             totalNotes: this._colorNotes.length,
         });
+        UserController.enableBasicMovement();
     }
 
     _calculateRank() {

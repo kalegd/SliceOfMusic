@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "bsmap": "^2.1.6",
-    "digitalbacon": "^0.3.10"
+    "digitalbacon": "^0.3.11"
   },
   "devDependencies": {
     "http-server": "14.1.1"
