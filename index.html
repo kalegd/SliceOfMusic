@@ -2,9 +2,10 @@
   <head>
     <title>Slice of Music</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="This app has tags!">
     <meta name="application-name" content="Slice of Music">
-    <meta data-canonical-url="https://cdn.jsdelivr.net/gh/kalegd/sliceofmusic@gh-pages/images/slice_of_music_ad.png">
+    <meta property="og:description" content="Slash boxes to the beat of music! Play now with all your favorite songs">
+    <meta property="og:url" content="https://sliceofmusic.com">
+    <meta property="og:image" content="https://cdn.jsdelivr.net/gh/kalegd/sliceofmusic@gh-pages/images/slice_of_music_ad.png">
     <meta name="keywords" content="rhythm,action,vr,ar,game">
     <link rel="icon" type="image/jpg" href="/assets/images/favicon.ico">
     <link rel="stylesheet" href="./css/index.css">
@@ -44,7 +45,7 @@
       setup("container", params).then(() => main());
 
       //SIG Beacon: https://github.com/zestyxyz/beacon/tree/main
-      const beacon = new Beacon('https://sliceofmusic.com');
+      const beacon = new Beacon('https://relay.zesty.xyz/relay');
       await beacon.signal();
     </script>
   </body>
