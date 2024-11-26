@@ -33,10 +33,15 @@
     <script type="module">
       import { setup } from 'DigitalBacon';
       import main from '/scripts/main.js';
+      import Beacon from 'https://cdn.jsdelivr.net/npm/sig-beacon@0.0.9/index.min.js';
 
       let params = { projectFilePath: './base-project.zip'};
 
       setup("container", params).then(() => main());
+
+      //SIG Beacon: https://github.com/zestyxyz/beacon/tree/main
+      const beacon = new Beacon('https://sliceofmusic.com');
+      await beacon.signal();
     </script>
   </body>
 </html>
